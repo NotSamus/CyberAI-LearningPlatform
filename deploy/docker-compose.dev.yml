@@ -1,0 +1,66 @@
+# Local development services: Postgres, JupyterHub and the grader (no GPU, no TLS). ../dev.sh starts
+# them all; ../dev-hub.sh starts only the hub.
+# Browser -> http://localhost:8081 ; hub -> backend on the host via host.docker.internal:8000
+# Backend on the host -> Postgres on localhost:5433
+name: cyberai-dev
+services:
+  db:                             # same Postgres major version as production
+    image: postgres:16
+    ports: ["127.0.0.1:5433:5432"]  # 5433 on the host: 5432 is often taken by a Postgres installed on the Mac
+    environment:
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: dev-db-password   # dev-only; production uses POSTGRES_PASSWORD from deploy/.env
+      POSTGRES_DB: platform
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "platform", "-d", "platform"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  jupyterhub:
+    build: ./jupyterhub
+    ports: ["8081:8000"]
+    stop_grace_period: 60s        # time for the hub to stop every notebook container on shutdown
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      # dev.sh sets these when other ports are used, or with --lan (this computer's network address
+      # instead of localhost, and random secrets instead of the two well-known ones below).
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      HUB_ORIGIN: ${HUB_ORIGIN:-http://localhost:8081}
+      PLATFORM_INTERNAL_URL: ${PLATFORM_INTERNAL_URL:-http://host.docker.internal:8000}
+      OAUTH_CLIENT_ID: jupyterhub
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-dev-oauth-secret}
+      PLATFORM_HUB_API_TOKEN: ${HUB_API_TOKEN:-dev-hub-api-token}
+      # dev-only key; production uses a random one from deploy/.env
+      JUPYTERHUB_CRYPT_KEY: 0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
+      DOCKER_NETWORK_NAME: cyberai-dev-users
+      DEV_FAKE_GPU: "1"
+      CLEANUP_SERVERS: "1"        # stopping the hub stops all notebook containers too
+      GPU_PROFILE_MEM: 3G
+      MAX_SESSIONS_PER_GPU: "2"
+      CPU_IMAGE: cyberai/notebook-cpu:latest
+      GPU_IMAGE: ${GPU_IMAGE:-cyberai/notebook-cpu:latest}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - hub-data:/data
+    networks: [users]
+
+  grader:                         # runs Otter in throwaway containers (../grader); backend on the host -> localhost:8090
+    build: ../grader
+    ports: ["127.0.0.1:8090:8000"]  # this computer only, also with dev.sh --lan
+    environment:
+      GRADER_TOKEN: ${GRADER_TOKEN:-dev-grader-token}
+      CPU_IMAGE: cyberai/notebook-cpu:latest
+      GPU_IMAGE: ${GPU_IMAGE:-cyberai/notebook-cpu:latest}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  users:
+    name: cyberai-dev-users
+
+volumes:
+  hub-data:
+  pg-data:

@@ -1,0 +1,8 @@
+{
+  "@jupyterlab/docmanager-extension:plugin": {
+    "autosaveInterval": 30
+  },
+  "@jupyterlab/apputils-extension:notification": {
+    "fetchNews": "false"
+  }
+}

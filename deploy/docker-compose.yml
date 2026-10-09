@@ -1,0 +1,95 @@
+# Run from deploy/:  docker compose up -d --build
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      HUB_DOMAIN: ${HUB_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks: [web]
+
+  frontend:                       # Next.js (expects frontend/Dockerfile running `next start` on :3000)
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_HUB_ORIGIN: ${HUB_ORIGIN}
+    restart: unless-stopped
+    networks: [web]
+
+  backend:                        # FastAPI + uvicorn
+    build:
+      context: ..                 # project root: the image needs api/ and sql/ (migrations)
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN}
+      HUB_ORIGIN: ${HUB_ORIGIN}
+      HUB_API_URL: http://jupyterhub:8000/hub/api
+      HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      SESSION_SECRET: ${PLATFORM_SESSION_SECRET}
+      DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD}@db:5432/platform
+      GRADER_URL: http://grader:8000
+      GRADER_TOKEN: ${GRADER_TOKEN}
+    networks: [web, data, grading]
+
+  grader:                         # runs Otter-Grader on notebooks, each in a throwaway locked-down container
+    build: ../grader
+    restart: unless-stopped
+    environment:
+      GRADER_TOKEN: ${GRADER_TOKEN}
+      CPU_IMAGE: ${CPU_IMAGE}
+      GPU_IMAGE: ${GPU_IMAGE}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # root-equivalent: this service has no database access and no published port
+    networks: [grading]           # only the backend can reach it
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: platform
+    volumes: [pg-data:/var/lib/postgresql/data]
+    networks: [data]              # student containers can never reach this network
+
+  jupyterhub:
+    build: ./jupyterhub
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN}
+      HUB_ORIGIN: ${HUB_ORIGIN}
+      PLATFORM_INTERNAL_URL: http://backend:8000
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      PLATFORM_HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN}
+      JUPYTERHUB_CRYPT_KEY: ${JUPYTERHUB_CRYPT_KEY}
+      DOCKER_NETWORK_NAME: jupyter-users
+      GPU_IDS: ${GPU_IDS}
+      MAX_SESSIONS_PER_GPU: ${MAX_SESSIONS_PER_GPU}
+      CPU_IMAGE: ${CPU_IMAGE}
+      GPU_IMAGE: ${GPU_IMAGE}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # root-equivalent: keep this container locked down
+      - hub-data:/data
+    networks: [web, jupyter-users]
+
+networks:
+  web:
+  data:
+    internal: true
+  grading:
+    internal: true
+  jupyter-users:
+    name: jupyter-users           # fixed name so DockerSpawner can attach student containers
+
+volumes:
+  caddy-data:
+  pg-data:
+  hub-data:

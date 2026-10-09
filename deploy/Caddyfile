@@ -1,0 +1,15 @@
+# Caddy obtains and renews TLS certificates automatically; WebSockets are proxied as-is.
+{$APP_DOMAIN} {
+	# The Content-Security-Policy header (frame-src for the hub) is set by Next.js, see frontend/next.config.ts
+	@backend path /api/* /oauth/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+
+{$HUB_DOMAIN} {
+	reverse_proxy jupyterhub:8000
+}
