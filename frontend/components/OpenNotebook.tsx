@@ -87,7 +87,7 @@ export default function OpenNotebook({ assignmentId }: { assignmentId: string })
     return (
       <div className="workspace">
         <div className="workspace-bar">
-          <Link href="/">← Assignments</Link>
+          <Link href="/">← Home</Link>
           <strong>{assignment.title}</strong>
           <span className={`badge ${launch.profile === "gpu" ? "gpu" : ""}`}>
             {launch.profile === "gpu" ? "GPU environment" : "Standard environment"}
@@ -113,7 +113,7 @@ export default function OpenNotebook({ assignmentId }: { assignmentId: string })
 
   return (
     <main className="page">
-      <p><Link href="/">← Assignments</Link></p>
+      <p><Link href="/">← Home</Link></p>
       <h1>{assignment?.title ?? "Assignment"}</h1>
       {assignment && (
         <p className="badges">

@@ -14,6 +14,15 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - `./dev.sh --lan` opens the dev site to the local network. Plain http, for trusted testers and test
   accounts only; it makes new hub, OAuth and grader secrets on every start. (2026-10-02)
 - Everything for teachers and admins lives under Settings (menu on the left); there is no separate Teach page. (2026-10-02)
+- Lessons are written in the site as a list of blocks (text, code, callout, picture, video, notebook link,
+  multiple choice, short answer), stored as JSON in Postgres with their pictures. Not a WYSIWYG editor:
+  text is Markdown, as in notebook cells. (2026-10-13)
+- A lesson has a working copy (saved as the teacher types) and a published copy (what students get).
+  Students never see half-typed edits; "Publish changes" hands over the new version. (2026-10-13)
+- Knowledge checks are checked on the server, three tries each, and are practice only: they never reach
+  the gradebook. Students are never sent the answers before a question is closed. (2026-10-13)
+- Videos in lessons come from YouTube only (cookie-less player); pictures are uploaded, never linked
+  from other sites. (2026-10-13)
 
 ## How accounts, Settings and the JupyterHub panel work (2026-10-02)
 
@@ -145,3 +154,46 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 ### Trying it locally
 - Log in as `admin` at http://localhost:3001. Under Settings > Assignments there is a draft
   "Functions lab (autograded example)": publish it, open it, submit.
+
+## Lessons (2026-10-13)
+
+### Where things are
+- The project folder is now `~/Desktop/CyberAI-LearningPlatform` (a git repository, on GitHub).
+- Settings > Lessons: list, "Start writing", order arrows, "Who has done it". The editor is at
+  `/settings/lessons/<id>`, the page students read at `/lessons/<id>`.
+- Backend: `api/app/lessons.py` (rules), `api/app/lesson_routes.py` (routes), migration
+  `sql/versions/2026_10_13_1301-96f8b8967047_lessons.py` (tables `lessons`, `lesson_images`,
+  `lesson_progress`, `lesson_answers`). Frontend: `components/LessonEditor.tsx`, `LessonBlocks.tsx`,
+  `LessonReader.tsx`, `Markdown.tsx`, `lib/lessons.ts`.
+- New frontend packages: `react-markdown` 10.1.0 and `remark-gfm` 4.0.1 (exact versions).
+
+### Writing fast
+- Autosave, no Save button. `/` on an empty line of a text block opens the block menu.
+  Ctrl/Cmd+Enter adds a text block below. Enter adds a quiz option, `*` in front ticks it as correct.
+- Paste or drop a picture anywhere. "Write or paste a whole lesson as text" turns text into blocks
+  (`?? question`, `- [x]` correct, `- [ ]` wrong, `= accepted answer`, `> explanation`).
+
+### Limits right now
+- A lesson goes to all students or to one course, not to chosen students.
+- Two teachers editing the same lesson at once overwrite each other (last save wins).
+- No math formulas in Markdown and no colours in code blocks.
+- Pictures taken out of a lesson are deleted from the database at the next Publish (after an hour).
+
+### Not verified
+- Dropping a picture file and choosing one with the file button, in a real browser (pasting was tested).
+- The frontend's production build was only run in Docker on the Mac, not on the server.
+
+### Still to do in the repository (2026-10-13)
+- `.gitignore` had `lib/` (from the Python template), which also ignored `frontend/lib/`: `api.ts`,
+  `dates.ts`, `errors.ts`, `sections.ts`, `useMe.ts` and `lessons.ts` were never on GitHub, so a fresh
+  clone could not build the frontend. `.gitignore` now has `!frontend/lib/`. Still to do: commit that
+  folder and push.
+- `notes.md` got committed in this repository (it was ignored in the old folder). `.gitignore` ignores
+  it again, but git keeps following a file it already has: `git rm --cached notes.md` and commit.
+  The copies already pushed stay in the GitHub history (nothing secret is in them).
+
+### On the UTEP server
+- `git pull`, `docker compose up -d --build`, then run the migrations (new tables).
+
+### Running it locally
+- `conda activate CyberP` first: `dev.sh` needs `alembic` and `uvicorn`, which are not in the base environment.

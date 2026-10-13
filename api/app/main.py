@@ -6,15 +6,18 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
-from app import admin, assignments, auth, config, submissions, teach
+from app import admin, assignments, auth, config, lesson_routes, lessons, submissions, teach
 from app.jupyter import launch, oauth
 
-# How large a request may be. Nearly everything sent here is a few lines of JSON; the one exception
-# is a teacher uploading a notebook. Anything bigger is cut off while it arrives, logged in or not,
-# so nobody can fill the server's memory or disk with one request.
+# How large a request may be. Nearly everything sent here is a few lines of JSON; the exceptions
+# are a teacher uploading a notebook, or a picture for a lesson. Anything bigger is cut off while it
+# arrives, logged in or not, so nobody can fill the server's memory or disk with one request.
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = assignments.MAX_NOTEBOOK_BYTES + 1024 * 1024
-LARGER_REQUESTS = {("POST", "/api/teach/assignments"): MAX_UPLOAD_REQUEST_BYTES}
+LARGER_REQUESTS = {
+    ("POST", "/api/teach/assignments"): MAX_UPLOAD_REQUEST_BYTES,
+    ("POST", "/api/teach/lesson-images"): lessons.MAX_IMAGE_BYTES + 1024 * 1024,
+}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +44,8 @@ app = FastAPI(
 app.include_router(auth.router)      # /api/auth/login, /api/auth/logout
 app.include_router(admin.router)     # /api/admin/users  (admins only)
 app.include_router(teach.router)     # /api/teach/...  (teachers and admins only)
+app.include_router(lesson_routes.teach_router)   # /api/teach/lessons/...  (teachers and admins only)
+app.include_router(lesson_routes.router)         # /api/lessons: read a lesson, answer its knowledge checks
 app.include_router(oauth.router)     # /oauth/authorize, /oauth/token, /oauth/userinfo  (JupyterHub login)
 app.include_router(launch.router)    # /api/me, /api/assignments (the ones this person may see), launch + stop
 

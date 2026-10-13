@@ -26,8 +26,9 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [
           // Frames may show the hub, plus the platform itself: the notebook iframe's login passes
-          // through this origin's /oauth/authorize. Nobody else may frame the platform.
-          { key: "Content-Security-Policy", value: `frame-src 'self' ${HUB_ORIGIN}; frame-ancestors 'self'` },
+          // through this origin's /oauth/authorize. Videos in lessons are YouTube's player without
+          // its cookies. Nobody else may frame the platform.
+          { key: "Content-Security-Policy", value: `frame-src 'self' ${HUB_ORIGIN} https://www.youtube-nocookie.com; frame-ancestors 'self'` },
         ],
       },
     ];

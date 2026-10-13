@@ -41,6 +41,21 @@ is no assignments folder to create or copy to the server, and backing up the dat
 Each student gets their own copy the first time they open an assignment. The project `README.md`
 describes courses, submitting and grading.
 
+Lessons are written in the site as well: **Settings > Lessons**. Their text, questions, pictures and
+what students answered are stored in Postgres too, so the same database backup covers them. Videos in
+lessons are played from `www.youtube-nocookie.com`, so students' browsers must be able to reach YouTube.
+
+### Updating a server that is already running
+
+```bash
+git pull
+docker compose up -d --build                                             # rebuilds the images that changed
+docker compose exec backend alembic -c ../sql/alembic.ini upgrade head   # adds new tables and columns
+```
+
+Run the migration every time: a new version may need tables the old one did not have (lessons were
+added this way), and until they exist the pages that use them answer with an error.
+
 ### The grading service
 
 `grader` runs Otter-Grader for autograded assignments. Student code is executed there, so it is kept

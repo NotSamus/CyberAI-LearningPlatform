@@ -139,3 +139,63 @@ class Submission(Base):
     feedback: Mapped[str] = mapped_column(Text, default="")             # the teacher's comment
     graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     graded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))   # None: the autograder
+
+
+class Lesson(Base):
+    """A page a teacher writes in the platform: text, code, images, videos and knowledge checks, as a
+    list of blocks (their shapes are in app/lessons.py)."""
+    __tablename__ = "lessons"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    summary: Mapped[str] = mapped_column(Text, default="")              # one or two lines, shown on the lesson's card
+    # `blocks` is the teacher's working copy, saved as they type. `live_blocks` is what students
+    # get: the working copy as it was the last time the teacher pressed Publish. Both are loaded
+    # only when asked for (deferred), so listing lessons stays cheap.
+    blocks: Mapped[list] = mapped_column(JSONB, default=list, deferred=True)
+    live_blocks: Mapped[list] = mapped_column(JSONB, default=list, deferred=True)
+    questions: Mapped[int] = mapped_column(default=0)                   # how many knowledge checks `live_blocks` has
+    published: Mapped[bool] = mapped_column(default=False)              # drafts are visible to teachers only
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who gets it: every student (including ones added later) or the students of one course.
+    for_everyone: Mapped[bool] = mapped_column(default=False)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), index=True)
+    position: Mapped[int] = mapped_column(default=0)                    # the order lessons are listed in, lowest first
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LessonImage(Base):
+    """A picture a teacher put in a lesson. Kept in the database, like notebooks."""
+    __tablename__ = "lesson_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True)
+    content_type: Mapped[str] = mapped_column(String(32))               # one of app.lessons.IMAGE_TYPES, found from the file itself
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LessonProgress(Base):
+    """Written the first time someone opens a lesson; `completed_at` when they mark it as complete."""
+    __tablename__ = "lesson_progress"
+
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LessonAnswer(Base):
+    """One person's answer to one knowledge check (a question block of a lesson). Answering again
+    replaces it, until it is correct or the tries are used up."""
+    __tablename__ = "lesson_answers"
+
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    block_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    answer: Mapped[dict] = mapped_column(JSONB)                         # {"choices": [option ids]} or {"text": "..."}
+    correct: Mapped[bool] = mapped_column()
+    first_try: Mapped[bool] = mapped_column()                           # correct at the first try
+    attempts: Mapped[int] = mapped_column(default=1)
+    answered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

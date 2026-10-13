@@ -104,7 +104,8 @@ def db(migrated_db_url, monkeypatch):
         yield session
     app.dependency_overrides.pop(get_db, None)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE users, sessions, assignments, assignment_students, assignment_opens, courses, course_students, announcements, submissions RESTART IDENTITY CASCADE"))
+        conn.execute(text("TRUNCATE users, sessions, assignments, assignment_students, assignment_opens, courses, course_students, announcements, submissions, "
+                          "lessons, lesson_images, lesson_progress, lesson_answers RESTART IDENTITY CASCADE"))
     engine.dispose()
 
 

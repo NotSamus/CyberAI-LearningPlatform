@@ -10,7 +10,7 @@ Design and server setup: see the "Student Jupyter Platform: Architecture & Setup
 api/app/main.py                FastAPI app
 api/app/config.py              settings (env vars, dev defaults)
 api/app/db.py                  SQLAlchemy engine, sessions, model Base
-api/app/models.py              database tables: users, login sessions, courses, assignments, submissions, announcements
+api/app/models.py              database tables: users, login sessions, courses, assignments, submissions, announcements, lessons
 api/app/auth.py                accounts, password hashing, login/logout, changing your password, limit on password guessing
 api/app/admin.py               admin-only API behind Settings > Accounts (add, edit, new password, remove)
 api/app/manage.py              command line tool: create accounts, grant admin, reset passwords, import a notebook
@@ -19,11 +19,14 @@ api/app/courses.py             courses (groups of students) and announcements
 api/app/submissions.py         submissions and grades; has the autograder grade them in the background
 api/app/grading.py             talks to the grading service; reads Otter-Grader's notebooks and results
 api/app/teach.py               teacher-only API behind Settings > Assignments, Courses, Announcements and the gradebook
+api/app/lessons.py             lessons: their blocks, who sees which, knowledge checks (checked on the server), pictures
+api/app/lesson_routes.py       lessons over HTTP: the teacher API behind Settings > Lessons, and reading and answering for everyone
 api/app/jupyter/               OAuth2 provider for JupyterHub, hub REST client, launch and submit API (copies notebooks to and from students)
 grader/                        grading service: runs Otter-Grader in throwaway locked-down containers (its own Docker image)
 sql/                           Alembic database migrations (see sql/README.md)
-test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading), test/sql (migrations)
-frontend/                      Next.js + TypeScript app (login, home with assignments by course, notebook page with iframe and Submit, Settings)
+test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading, lessons), test/sql (migrations)
+frontend/                      Next.js + TypeScript app (login, home with lessons and assignments by course, lesson page, lesson editor,
+                               notebook page with iframe and Submit, Settings)
 assignments/<id>/              example notebooks to import, one of them autograded (see Assignments below)
 deploy/                        production stack, hub config, notebook images, scripts
 dev.sh                         start everything: Postgres (:5433), JupyterHub (:8081), grader (:8090), backend (:8000), frontend (:3000)
@@ -124,6 +127,7 @@ Everyone has a **Settings** button in the top bar. The menu on the left shows th
 
 | Section | Who | What |
 | --- | --- | --- |
+| Lessons | teachers, admins | write lessons block by block, publish them; per lesson: who has done it |
 | Assignments | teachers, admins | upload notebooks, give them to students, publish; per assignment: progress and grades |
 | Courses | teachers, admins | groups of students |
 | Announcements | teachers, admins | short messages on students' home page |
@@ -132,7 +136,58 @@ Everyone has a **Settings** button in the top bar. The menu on the left shows th
 | My account | everyone | change your password |
 
 The menu only hides links. Each section's data comes from the API, which checks the account on every request.
-For now every teacher sees and manages every course and assignment.
+For now every teacher sees and manages every course, lesson and assignment.
+
+## Lessons
+
+Lessons are written in the site, under **Settings > Lessons**: type a title, press **Start writing**, and
+the editor opens. A lesson is a list of **blocks**:
+
+| Block | What it is |
+| --- | --- |
+| Text | Markdown, as in a notebook's text cells: headings, lists, links, tables, inline code |
+| Code | a snippet with a language label |
+| Callout | a note, tip or warning box |
+| Picture | PNG, JPEG, GIF or WebP up to 5 MB: choose a file, or paste or drop it anywhere in the lesson |
+| Video | a YouTube link, shown as a player |
+| Notebook | a link to a notebook assignment, shown to the students that assignment was given to |
+| Multiple choice | a knowledge check with 2 to 8 options. One ticked option: students choose one. Several: they must choose exactly those. "True or false" is the same block with the two options filled in |
+| Short answer | a knowledge check where the student types the answer. It is right when it equals one of the accepted answers, ignoring capital letters and extra spaces |
+
+Writing is meant to be quick:
+
+- Everything is **saved by itself** a moment after you stop typing. There is no Save button.
+- Text blocks show the result, and turn into a text field when you click them, like notebook cells.
+- Type `/` on an empty line of a text block for the menu of blocks (`/mu` + Enter gives a multiple-choice
+  question). **Ctrl/⌘ + Enter** adds a text block below the block you are in.
+- In a question, **Enter** adds the next option and starting an option with `*` ticks it as correct.
+  Options left empty are ignored.
+- **Write or paste a whole lesson as text** (at the bottom of the editor) turns one piece of text into
+  blocks: Markdown for text (each heading starts a block), a line starting with `?? ` for a question
+  followed by `- [ ]` wrong and `- [x]` correct options or `= accepted answer` lines and a `> ` explanation,
+  ` ``` ` around code, and `> [!NOTE]`, `> [!TIP]` or `> [!WARNING]` for a callout. **Show an example** fills one in.
+
+What you write is your **working copy**. Students get the lesson when you press **Publish**, and keep that
+version while you go on editing, until you press **Publish changes**. Publishing is refused, with the
+reasons, while a question is unfinished (no question text, fewer than two options, no correct option, no
+accepted answer). **Preview** shows your working copy as a student would see it, questions included.
+**For** (top of the editor) chooses who gets the lesson: all students or one course. The arrows in the
+list of lessons set the order students see them in.
+
+Students see their lessons on the home page, above the assignments of the same course, with a status
+(Not started, In progress, Completed). On a lesson's page they answer the knowledge checks and press
+**Mark as complete** once every check is done; the next lesson of the course is linked at the bottom.
+
+**Knowledge checks are checked on the server** (`api/app/lessons.py`). What a student's browser receives
+never contains which option is correct, the accepted answers or the explanation. Each check allows three
+tries: a wrong try is only told to be wrong; a right answer, or the third wrong one, closes the question
+and shows the explanation and the right answer. They are practice and do not count towards any grade.
+**Who has done it** (in the list of lessons) shows per student who opened and completed the lesson, and
+per question how many got it right at the first try, in the end, or not at all.
+
+When a published change alters what counts as right in a question (its options or accepted answers), or
+removes the question, students' earlier answers to it are deleted and they are asked again. Fixing a typo
+in the question or in an option's text keeps them.
 
 ## Assignments
 
@@ -152,8 +207,8 @@ Jupyter home at `assignments/<folder>/<file>.ipynb`, through that student's runn
 It is never overwritten after that: the file is the student's work. Deleting an assignment removes it
 (with its submissions and grades) from the platform, not from the homes of students who already opened it.
 
-The home page shows each student their assignments by course, each with its status: Not started, Opened,
-Overdue, Submitted, Grading or the score.
+The home page shows each student their lessons and assignments by course. Each assignment has its status:
+Not started, Opened, Overdue, Submitted, Grading or the score.
 
 ### Submitting and grading
 
@@ -214,7 +269,15 @@ python -m app.manage import-assignment ../assignments/otter-example/functions.ip
 
 Uploads are checked on the server: the file must be a real notebook (validated with `nbformat`) and its
 name is reduced to a plain file name. Requests are limited to 1 MB, except a teacher's notebook upload
-(11 MB), which is only read after the account has been checked (`LimitRequestSize` in `api/app/main.py`).
+(11 MB) and a picture for a lesson (6 MB), which are only read after the account has been checked
+(`LimitRequestSize` in `api/app/main.py`).
+
+Lessons: every block is checked on the server before it is saved (known types only, length limits, at
+most 200 blocks). A picture is accepted by how the file starts, never by its name, as PNG, JPEG, GIF or
+WebP only (SVG can carry scripts and is refused), and is served only to people who may see that lesson.
+Markdown is rendered without running any HTML written in it, and pictures from other sites are not
+loaded. Videos are only ever embedded from YouTube's cookie-less player, the one other site the pages
+may show in a frame (`frontend/next.config.ts`).
 
 After 5 wrong passwords for one username from one network address, further logins for that username from
 that address are refused for 15 minutes (`MAX_LOGIN_ATTEMPTS` in `api/app/auth.py`). `test/api/test_security.py`
@@ -222,11 +285,14 @@ attacks the login and the admin API: password guessing (also of the current pass
 SQL injection, forged and planted cookies, oversized input, requests sent from other websites, and a
 student asking for admin data or trying to create, change or remove accounts. `test_assignments.py`,
 `test_courses.py` and `test_grading.py` do the same for the teacher API: students trying to upload,
-grade themselves, read other students' submissions or see hidden tests.
+grade themselves, read other students' submissions or see hidden tests. `test_lessons.py` checks that
+students cannot write or read drafts, and that nothing they are sent gives away an answer.
 
 Current limits: an assignment is one notebook file (no extra data files) and its file cannot be replaced
 after upload. Every teacher manages every course and assignment. Only the newest submission of a student
-is kept. Locally the "GPU" profile is simulated: same
+is kept. Lessons can be given to all students or to one course, not to chosen students; two teachers
+editing the same lesson at once overwrite each other; code blocks are not coloured and Markdown has no
+math formulas yet. Locally the "GPU" profile is simulated: same
 checks, no GPU attached, and it uses the CPU image, so `import torch` fails unless you pass
 `GPU_IMAGE=... ./dev-hub.sh`.
 

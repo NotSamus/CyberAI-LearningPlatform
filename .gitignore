@@ -15,6 +15,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/lib/
 lib64/
 parts/
 sdist/
@@ -223,3 +224,8 @@ __marimo__/
 node_modules/
 frontend/node_modules/
 frontend/.next/
+*.tsbuildinfo
+
+# personal notes and machine files
+notes.md
+.DS_Store
