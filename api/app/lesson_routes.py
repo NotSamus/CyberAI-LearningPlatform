@@ -265,9 +265,14 @@ def start_over(lesson: Lesson = Depends(visible_lesson), teacher: PlatformUser =
 
 
 @router.get("/lessons/{lesson_id}/images/{image_id}")
-def lesson_image(image_id: int, lesson: Lesson = Depends(visible_lesson), db: Session = Depends(get_db)):
-    """A picture of a lesson, for the people who may see that lesson."""
-    image = lessons.get_image(db, lesson.id, image_id)
+def lesson_image(
+    image_id: int, lesson: Lesson = Depends(visible_lesson), user: PlatformUser = Depends(require_user), db: Session = Depends(get_db),
+):
+    """A picture of a lesson, for the people who may see that lesson. Students only get the pictures
+    of the published version: not one that is only in the teacher's working copy yet, or was uploaded
+    and never used."""
+    shown = {block["image_id"] for block in lesson.live_blocks if block["type"] == "image"}
+    image = lessons.get_image(db, lesson.id, image_id) if user.can_teach or image_id in shown else None
     if image is None:
         raise HTTPException(404, "No such picture.")
     content_type, data = image

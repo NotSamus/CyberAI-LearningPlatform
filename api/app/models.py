@@ -8,6 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 ROLES = ("student", "teacher")
+# How the site looks for an account, chosen under My account. The browser only shows it; a name
+# outside this list is refused by the server (app/auth.py).
+THEMES = ("standard", "halloween", "retro")
 
 
 class User(Base):
@@ -21,6 +24,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16))                       # decides the hub groups
     is_admin: Mapped[bool] = mapped_column(default=False)               # may manage accounts
     gpu_enabled: Mapped[bool] = mapped_column(default=False)
+    theme: Mapped[str] = mapped_column(String(16), default="standard", server_default="standard")   # one of THEMES
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

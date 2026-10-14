@@ -109,6 +109,12 @@ c.DockerSpawner.volumes = {
 }
 c.Spawner.start_timeout = 120
 c.Spawner.http_timeout = 60
+# Notebook servers ignore Jupyter config files in the student's home (~/.jupyter), so a student
+# cannot change how their server is set up that way. Only an extra layer: Python packages the
+# student installs in their home (~/.local) still load, and anything a student runs can see what
+# reaches their server. What keeps the hub safe is that the platform never sends its service token
+# to a notebook server (api/app/jupyter/hub_client.py).
+c.Spawner.disable_user_config = True
 
 # Local development on a machine without an NVIDIA GPU: the "gpu" profile still exists and keeps
 # its entitlement and slot checks, but no device is attached to the container.
@@ -232,9 +238,17 @@ c.JupyterHub.load_roles = [
     {
         "name": "platform-role",
         "services": ["platform"],
-        # access:servers lets the backend put an assignment's notebook into a student's home
-        # through that student's running server (api/app/jupyter/hub_client.py: put_file_if_missing)
-        "scopes": ["admin:users", "admin:servers", "admin:groups", "list:users", "read:hub", "access:servers"],
+        # What the backend (api/app/jupyter/hub_client.py) and deploy/scripts/reset-student.sh need:
+        #   admin:users   create, look up and delete hub users
+        #   servers       start and stop their notebook servers, and see whether one is ready
+        #   admin:groups  keep each user's hub groups (students, teachers, gpu) in step with the platform
+        #   list:users    list the hub's users (no call needs it today; admin:users includes it too)
+        #   tokens        make, and then delete, a short-lived token of a user's own for one file
+        #                 operation on that user's server (has_file, get_file, put_file). The hub only
+        #                 gives such a token what its owner may do anyway, so it opens their own server.
+        # No access:servers: the service token never goes to a notebook server, where code a student
+        # runs could read it.
+        "scopes": ["admin:users", "servers", "admin:groups", "list:users", "tokens"],
     },
     {
         "name": "idle-culler-role",

@@ -29,20 +29,19 @@ services:
       APP_ORIGIN: ${APP_ORIGIN}
       HUB_ORIGIN: ${HUB_ORIGIN}
       HUB_API_URL: http://jupyterhub:8000/hub/api
-      HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN}
+      HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN:?set it in deploy/.env}
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
-      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
-      SESSION_SECRET: ${PLATFORM_SESSION_SECRET}
-      DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD}@db:5432/platform
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:?set it in deploy/.env}
+      DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD:?set it in deploy/.env}@db:5432/platform
       GRADER_URL: http://grader:8000
-      GRADER_TOKEN: ${GRADER_TOKEN}
+      GRADER_TOKEN: ${GRADER_TOKEN:?set it in deploy/.env}
     networks: [web, data, grading]
 
   grader:                         # runs Otter-Grader on notebooks, each in a throwaway locked-down container
     build: ../grader
     restart: unless-stopped
     environment:
-      GRADER_TOKEN: ${GRADER_TOKEN}
+      GRADER_TOKEN: ${GRADER_TOKEN:?set it in deploy/.env}
       CPU_IMAGE: ${CPU_IMAGE}
       GPU_IMAGE: ${GPU_IMAGE}
     volumes:
@@ -54,7 +53,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: platform
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in deploy/.env}
       POSTGRES_DB: platform
     volumes: [pg-data:/var/lib/postgresql/data]
     networks: [data]              # student containers can never reach this network
@@ -67,9 +66,9 @@ services:
       HUB_ORIGIN: ${HUB_ORIGIN}
       PLATFORM_INTERNAL_URL: http://backend:8000
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
-      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
-      PLATFORM_HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN}
-      JUPYTERHUB_CRYPT_KEY: ${JUPYTERHUB_CRYPT_KEY}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:?set it in deploy/.env}
+      PLATFORM_HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN:?set it in deploy/.env}
+      JUPYTERHUB_CRYPT_KEY: ${JUPYTERHUB_CRYPT_KEY:?set it in deploy/.env}
       DOCKER_NETWORK_NAME: jupyter-users
       GPU_IDS: ${GPU_IDS}
       MAX_SESSIONS_PER_GPU: ${MAX_SESSIONS_PER_GPU}

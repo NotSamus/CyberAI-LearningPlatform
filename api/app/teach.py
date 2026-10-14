@@ -77,7 +77,8 @@ def list_students(teacher: PlatformUser = Depends(require_teacher), db: Session 
 
 @router.get("/assignments")
 def list_assignments(teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
-    course_names, given = courses.names(db), assignments.student_ids(db)
+    """Every assignment, each with how far its students have got (`counts`, see assignments.counts)."""
+    course_names, given, counted = courses.names(db), assignments.student_ids(db), assignments.counts(db)
     return [
         {
             **assignments.summary(a, course_names),
@@ -86,6 +87,7 @@ def list_assignments(teacher: PlatformUser = Depends(require_teacher), db: Sessi
             "for_everyone": a.for_everyone,
             "student_ids": given.get(a.id, []),
             "created_at": a.created_at.isoformat(),
+            "counts": counted[a.id],
         }
         for a in db.scalars(select(Assignment).order_by(Assignment.id.desc()))
     ]

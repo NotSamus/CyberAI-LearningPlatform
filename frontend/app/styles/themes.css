@@ -1,0 +1,206 @@
+/* Themes, chosen per account under My account > Appearance (lib/themes.ts). The standard look is
+   in ../globals.css; a theme sets <html data-theme="..."> and changes it from here. Most of a theme
+   is the colour roles of globals.css given other values (a :root[data-theme] rule wins over both
+   the light and the dark ones); after that come the few pieces it draws its own way.
+   Every text colour is still at least 4.5:1 on what it stands on, and outlines of fields 3:1. */
+
+/* --- Halloween: midnight purple, pumpkin orange, bone white; a few bats and a cobweb ------------ */
+:root[data-theme="halloween"] {
+  color-scheme: dark;
+  --bg: hsl(270, 25%, 6%);
+  --card: hsl(270, 20%, 11%);
+  --tint: hsl(270, 18%, 17%);
+  --edge: hsl(270, 18%, 20%);
+  --text: hsl(40, 30%, 92%);
+  --muted: hsl(35, 12%, 68%);
+  --border: hsl(270, 15%, 20%);
+  --border-strong: hsl(270, 12%, 52%);
+  --accent: hsl(28, 95%, 58%);
+  --accent-hover: hsl(28, 95%, 65%);
+  --accent-text: hsl(270, 30%, 7%);
+  --accent-tint: hsl(275, 35%, 18%);
+  --info: hsl(275, 90%, 82%);
+  --gpu: hsl(100, 65%, 55%);
+  --good-tint: hsl(100, 35%, 13%);
+  --error: hsl(0, 80%, 72%);
+  --bad-tint: hsl(0, 40%, 15%);
+  --warn: hsl(48, 95%, 68%);
+  --warn-tint: hsl(45, 40%, 13%);
+  --warn-line: hsl(45, 90%, 50%);
+  --navy: hsl(270, 35%, 9%);
+  --bar-text: hsl(40, 30%, 92%);
+  --bar-muted: hsl(35, 25%, 72%);
+  --bar-hover: hsl(270, 30%, 18%);
+  --bar-line: hsl(270, 20%, 40%);
+  --bar-edge: hsl(270, 25%, 20%);
+  --spark: hsl(32, 100%, 60%);
+  --avatar: hsl(28, 70%, 35%);
+  --mark-from: hsl(28, 90%, 48%);
+  --mark-to: hsl(270, 50%, 18%);
+  --shadow-1: 0 1px 3px hsla(0, 0%, 0%, 0.5), 0 1px 2px hsla(0, 0%, 0%, 0.6);
+  --shadow-2: 0 3px 6px hsla(0, 0%, 0%, 0.55), 0 2px 4px hsla(0, 0%, 0%, 0.5);
+  --shadow-3: 0 10px 24px hsla(0, 0%, 0%, 0.6), 0 3px 6px hsla(0, 0%, 0%, 0.5);
+  --code-bg: hsl(270, 35%, 4%);
+  --code-text: hsl(40, 30%, 90%);
+  --code-head: hsl(270, 30%, 10%);
+  --code-muted: hsl(35, 15%, 65%);
+  --code-edge: var(--edge);
+  --code-keyword: hsl(28, 95%, 62%);
+  --code-string: hsl(100, 60%, 62%);
+  --code-number: hsl(48, 95%, 68%);
+  --code-comment: hsl(270, 14%, 62%);
+  --code-function: hsl(275, 85%, 80%);
+  --code-builtin: hsl(15, 85%, 70%);
+  --code-type: hsl(40, 40%, 85%);
+  --code-meta: hsl(330, 80%, 75%);
+}
+:root[data-theme="halloween"] ::selection { background: var(--accent); color: var(--accent-text); }
+/* Bats over the middle of the bar, and a lit pumpkin after the name */
+:root[data-theme="halloween"] .topbar::after { content: ""; position: absolute; top: var(--s1); left: 50%; width: calc(2 * var(--s8) + var(--s4)); height: calc(var(--bar-h) - var(--s2)); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 44' fill='rgb(236,226,210)'%3E%3Cpath transform='translate(4 18) scale(1.1)' d='M12 3l1-2 1 2.5c1.5-.3 2.8.4 3.6 1.6C20 4 22.5 4.5 24 7c-1.8-.6-3.4-.2-4.4 1-.9-.8-2.2-1-3.3-.4-.6-1-1.7-1.5-2.8-1.2L12 9l-1.5-2.6c-1.1-.3-2.2.2-2.8 1.2-1.1-.6-2.4-.4-3.3.4-1-1.2-2.6-1.6-4.4-1 1.5-2.5 4-3 6.4-1.9C7.2 3.9 8.5 3.2 10 3.5L11 1z'/%3E%3Cpath transform='translate(58 4) scale(.8) rotate(-12 12 5)' d='M12 3l1-2 1 2.5c1.5-.3 2.8.4 3.6 1.6C20 4 22.5 4.5 24 7c-1.8-.6-3.4-.2-4.4 1-.9-.8-2.2-1-3.3-.4-.6-1-1.7-1.5-2.8-1.2L12 9l-1.5-2.6c-1.1-.3-2.2.2-2.8 1.2-1.1-.6-2.4-.4-3.3.4-1-1.2-2.6-1.6-4.4-1 1.5-2.5 4-3 6.4-1.9C7.2 3.9 8.5 3.2 10 3.5L11 1z' fill-opacity='.8'/%3E%3Cpath transform='translate(100 22) scale(.6) rotate(10 12 5)' d='M12 3l1-2 1 2.5c1.5-.3 2.8.4 3.6 1.6C20 4 22.5 4.5 24 7c-1.8-.6-3.4-.2-4.4 1-.9-.8-2.2-1-3.3-.4-.6-1-1.7-1.5-2.8-1.2L12 9l-1.5-2.6c-1.1-.3-2.2.2-2.8 1.2-1.1-.6-2.4-.4-3.3.4-1-1.2-2.6-1.6-4.4-1 1.5-2.5 4-3 6.4-1.9C7.2 3.9 8.5 3.2 10 3.5L11 1z' fill-opacity='.6'/%3E%3C/svg%3E") no-repeat center / contain; opacity: 0.6; pointer-events: none; }
+:root[data-theme="halloween"] .brand::after { content: ""; width: var(--s5); height: var(--s5); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 5c0-2 1-3 3-3' stroke='rgb(92,140,52)' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Cellipse cx='7.5' cy='14' rx='6' ry='8' fill='rgb(222,110,22)'/%3E%3Cellipse cx='16.5' cy='14' rx='6' ry='8' fill='rgb(222,110,22)'/%3E%3Cellipse cx='12' cy='14' rx='6' ry='8.5' fill='rgb(246,139,36)'/%3E%3Cpath d='M7 11l2.5-2 1 3zM17 11l-2.5-2-1 3zM7 16.5c2 2 8 2 10 0l-1.5 2-1.5-1-1 1.5-1-1.5-1.5 1z' fill='rgb(255,214,102)'/%3E%3C/svg%3E") no-repeat center / contain; }
+/* A cobweb in the corner of the page, under everything on it */
+:root[data-theme="halloween"] body::before { content: ""; position: fixed; z-index: -1; top: var(--bar-h); left: 0; width: calc(3 * var(--s8)); height: calc(3 * var(--s8)); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180' fill='none' stroke='rgb(236,226,210)' stroke-width='1'%3E%3Cpath d='M0 0L180.0 0.0M0 0L173.9 46.6M0 0L155.9 90.0M0 0L127.3 127.3M0 0L90.0 155.9M0 0L46.6 173.9M0 0L0.0 180.0M34.0 0.0Q29.0 3.8 32.8 8.8Q27.0 11.2 29.4 17.0Q23.2 17.8 24.0 24.0Q17.8 23.2 17.0 29.4Q11.2 27.0 8.8 32.8Q3.8 29.0 0.0 34.0M70.0 0.0Q59.7 7.9 67.6 18.1Q55.6 23.0 60.6 35.0Q47.8 36.6 49.5 49.5Q36.6 47.8 35.0 60.6Q23.0 55.6 18.1 67.6Q7.9 59.7 0.0 70.0M108.0 0.0Q92.1 12.1 104.3 28.0Q85.8 35.5 93.5 54.0Q73.7 56.5 76.4 76.4Q56.5 73.7 54.0 93.5Q35.5 85.8 28.0 104.3Q12.1 92.1 0.0 108.0M146.0 0.0Q124.5 16.4 141.0 37.8Q116.0 48.0 126.4 73.0Q99.6 76.4 103.2 103.2Q76.4 99.6 73.0 126.4Q48.0 116.0 37.8 141.0Q16.4 124.5 0.0 146.0'/%3E%3C/svg%3E") no-repeat top left / contain; opacity: 0.16; pointer-events: none; }
+
+/* --- Retro 95: grey windows with bevelled edges on a teal desktop, a taskbar at the top --------- */
+:root[data-theme="retro"] {
+  color-scheme: light;
+  --font: Tahoma, Verdana, "Segoe UI", sans-serif;
+  --radius: 0; --radius-small: 0; --pill: 0;
+  /* Edges: raised (windows, buttons), pressed, and the sunken white of fields and lists */
+  --bevel-out: inset -1px -1px hsl(0, 0%, 4%), inset 1px 1px hsl(0, 0%, 100%), inset -2px -2px hsl(0, 0%, 50%), inset 2px 2px hsl(0, 0%, 87%);
+  --bevel-in: inset -1px -1px hsl(0, 0%, 100%), inset 1px 1px hsl(0, 0%, 4%), inset -2px -2px hsl(0, 0%, 87%), inset 2px 2px hsl(0, 0%, 50%);
+  --bevel-field: inset -1px -1px hsl(0, 0%, 100%), inset 1px 1px hsl(0, 0%, 50%), inset -2px -2px hsl(0, 0%, 87%), inset 2px 2px hsl(0, 0%, 4%);
+  --title-bar: linear-gradient(90deg, hsl(240, 100%, 25%), hsl(204, 86%, 44%));
+  --desktop: hsl(180, 100%, 22%);
+  --bg: hsl(0, 0%, 75%);
+  --card: hsl(0, 0%, 75%);
+  --tint: hsl(0, 0%, 84%);
+  --edge: transparent;
+  --text: hsl(0, 0%, 0%);
+  --muted: hsl(0, 0%, 25%);
+  --border: hsl(0, 0%, 50%);
+  --border-strong: hsl(0, 0%, 25%);
+  --accent: hsl(240, 100%, 25%);
+  --accent-hover: hsl(240, 100%, 32%);
+  --accent-text: hsl(0, 0%, 100%);
+  --accent-tint: hsl(230, 45%, 88%);
+  --info: hsl(240, 100%, 25%);
+  --gpu: hsl(120, 100%, 20%);
+  --good-tint: hsl(120, 35%, 85%);
+  --error: hsl(0, 100%, 25%);
+  --bad-tint: hsl(0, 45%, 88%);
+  --warn: hsl(45, 100%, 17%);
+  --warn-tint: hsl(60, 100%, 94%);
+  --warn-line: hsl(48, 100%, 45%);
+  --navy: hsl(0, 0%, 75%);
+  --bar-text: hsl(0, 0%, 0%);
+  --bar-muted: hsl(0, 0%, 15%);
+  --bar-hover: hsl(0, 0%, 84%);
+  --bar-line: hsl(0, 0%, 50%);
+  --bar-edge: transparent;
+  --spark: hsl(240, 100%, 25%);
+  --avatar: hsl(240, 100%, 25%);
+  --mark-from: hsl(180, 100%, 25%);
+  --mark-to: hsl(240, 100%, 25%);
+  --shadow-1: var(--bevel-out);
+  --shadow-2: var(--bevel-out);
+  --shadow-3: var(--bevel-out);
+  --code-bg: hsl(0, 0%, 100%);
+  --code-text: hsl(0, 0%, 0%);
+  --code-head: hsl(0, 0%, 75%);
+  --code-muted: hsl(0, 0%, 0%);
+  --code-edge: hsl(0, 0%, 50%);
+  /* The colours of an editor of the time, on white */
+  --code-keyword: hsl(240, 100%, 40%);
+  --code-string: hsl(0, 100%, 30%);
+  --code-number: hsl(180, 100%, 23%);
+  --code-comment: hsl(120, 100%, 25%);
+  --code-function: hsl(0, 0%, 0%);
+  --code-builtin: hsl(300, 100%, 28%);
+  --code-type: hsl(200, 100%, 26%);
+  --code-meta: hsl(30, 100%, 27%);
+}
+:root[data-theme="retro"] body { background: var(--desktop); }
+:root[data-theme="retro"] ::selection { background: var(--accent); color: var(--accent-text); }
+/* The bar is a taskbar: the logo is its Start button, the areas are its buttons */
+:root[data-theme="retro"] .topbar { border-bottom: 0; }
+:root[data-theme="retro"] .topbar :focus-visible { outline: 1px dotted hsl(0, 0%, 0%); outline-offset: -4px; }
+:root[data-theme="retro"] .brand { padding: var(--s1) var(--s2); box-shadow: var(--bevel-out); font-size: var(--t-base); }
+:root[data-theme="retro"] .brand svg { width: var(--s5); height: var(--s5); }
+:root[data-theme="retro"] .topnav a { color: var(--text); box-shadow: var(--bevel-out); font-weight: 400; }
+:root[data-theme="retro"] .topnav a:hover { background: var(--card); }
+:root[data-theme="retro"] .topnav a.active { background: repeating-conic-gradient(hsl(0, 0%, 75%) 0% 25%, hsl(0, 0%, 100%) 0% 50%) 0 0 / 2px 2px; color: var(--text); box-shadow: var(--bevel-in); font-weight: var(--bold); }
+:root[data-theme="retro"] .avatar { color: var(--accent-text); }
+/* Every page is a window, with a title bar */
+:root[data-theme="retro"] :is(main.page, main.area-page) { margin-top: var(--s5); margin-bottom: var(--s5); background: var(--bg); box-shadow: var(--bevel-out); }
+:root[data-theme="retro"] :is(main.page, main.area-page)::before { content: "cyberAI Platform" / ""; display: block; margin: calc(var(--s1) - var(--s6)) calc(var(--s1) - var(--s5)) var(--s5); padding: 2px var(--s2); background: var(--title-bar); color: hsl(0, 0%, 100%); font-size: var(--t-sm); font-weight: var(--bold); }
+@media (min-width: 1100px) {
+  /* The list of lessons stands beside a lesson's window, on the desktop: a small window of its own */
+  :root[data-theme="retro"] .lesson-menu .rail { padding: var(--s3); background: var(--bg); box-shadow: var(--bevel-out); }
+}
+/* Logging in: the band is desktop, the form a window */
+:root[data-theme="retro"] .login-band { background: transparent; }
+:root[data-theme="retro"] .login-band :is(h1, p) { color: hsl(0, 0%, 100%); }
+:root[data-theme="retro"] .login form::before { content: "Log in to cyberAI" / ""; display: block; margin: calc(var(--s1) - var(--s6)) calc(var(--s1) - var(--s5)) var(--s2); padding: 2px var(--s2); background: var(--title-bar); color: hsl(0, 0%, 100%); font-size: var(--t-sm); font-weight: var(--bold); }
+:root[data-theme="retro"] .login-card > p { color: hsl(0, 0%, 100%); }
+/* Buttons: grey and raised, pressed in when clicked; the main one has a black frame, as the default button had */
+:root[data-theme="retro"] :is(button, a.button):not(.icon, .text-button, .copy, .who, .menu-list *) { background: var(--card); color: var(--text); border: 0; box-shadow: var(--bevel-out); font-weight: 400; }
+:root[data-theme="retro"] :is(button, a.button):not(.icon, .text-button, .copy, .who, .menu-list *):hover:not(:disabled) { background: var(--card); }
+:root[data-theme="retro"] :is(button, a.button):not(.icon, .text-button, .copy, .who, .menu-list *):active:not(:disabled) { box-shadow: var(--bevel-in); }
+:root[data-theme="retro"] :is(button, a.button):not(.secondary, .icon, .text-button, .copy, .who, .menu-list *) { box-shadow: 0 0 0 1px hsl(0, 0%, 0%), var(--bevel-out); font-weight: var(--bold); }
+:root[data-theme="retro"] :is(button, a.button):not(.secondary, .icon, .text-button, .copy, .who, .menu-list *):active:not(:disabled) { box-shadow: 0 0 0 1px hsl(0, 0%, 0%), var(--bevel-in); }
+:root[data-theme="retro"] button:disabled:not(.icon) { background: var(--card); color: hsl(0, 0%, 50%); text-shadow: 1px 1px 0 hsl(0, 0%, 100%); }
+:root[data-theme="retro"] button.secondary.danger { color: var(--error); }
+:root[data-theme="retro"] :is(button, a.button):focus-visible { outline: 1px dotted hsl(0, 0%, 0%); outline-offset: -5px; }
+/* Fields and lists are sunken and white */
+:root[data-theme="retro"] :is(input:not([type="checkbox"], [type="radio"]), select, textarea) { background: hsl(0, 0%, 100%); border: 0; box-shadow: var(--bevel-field); }
+:root[data-theme="retro"] :is(input, select, textarea):disabled { background: var(--card); }
+:root[data-theme="retro"] :is(.list, .table-scroll, .table-box) { background: hsl(0, 0%, 100%); box-shadow: var(--bevel-field); }
+:root[data-theme="retro"] th { background: var(--card); color: var(--text); box-shadow: var(--bevel-out); }
+/* Dialogs and menus: windows too */
+:root[data-theme="retro"] dialog.dialog { border: 0; }
+:root[data-theme="retro"] dialog.dialog::backdrop { background: hsla(0, 0%, 0%, 0.25); }
+:root[data-theme="retro"] .dialog-head { margin: var(--s1); padding: 2px var(--s1) 2px var(--s2); background: var(--title-bar); border-bottom: 0; }
+:root[data-theme="retro"] .dialog-head h2 { color: hsl(0, 0%, 100%); font-size: var(--t-sm); }
+:root[data-theme="retro"] .dialog-head button.icon { width: var(--s5); height: var(--s5); background: var(--card); color: var(--text); box-shadow: var(--bevel-out); }
+:root[data-theme="retro"] .dialog-foot { background: var(--card); border-top: 0; }
+:root[data-theme="retro"] .menu-list { border: 0; }
+:root[data-theme="retro"] .menu-list :is(button, a):hover:not(:disabled), :root[data-theme="retro"] .menu-list :is(button, a):focus-visible { background: var(--accent); color: var(--accent-text); }
+:root[data-theme="retro"] .menu-list :is(button, a).danger:hover:not(:disabled) { background: var(--accent); color: var(--accent-text); }
+/* Progress in blocks */
+:root[data-theme="retro"] .progress-track { height: var(--s3); background: hsl(0, 0%, 100%); box-shadow: var(--bevel-field); }
+:root[data-theme="retro"] .progress-fill { margin: 2px; height: calc(100% - 4px); background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px); }
+
+/* --- The small pictures of the themes on My account: each in its own colours, whatever the page is in */
+.theme-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(3 * var(--s8)), 1fr)); gap: var(--s3); margin-top: var(--s4); }
+.theme-choice { position: relative; display: grid; align-content: start; gap: var(--s2); padding: var(--s3); border: 1px solid var(--border-strong); border-radius: var(--radius); cursor: pointer; }
+.theme-choice input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
+.theme-choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-choice:hover:not(:has(input:disabled)) { background: var(--tint); }
+.theme-choice.chosen { background: var(--accent-tint); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.theme-choice:has(input:disabled) { cursor: default; }
+.theme-words { display: grid; gap: var(--s1); }
+.theme-words .muted { font-size: var(--t-sm); }
+.theme-preview { position: relative; display: block; height: calc(var(--s8) + var(--s4)); overflow: hidden; border-radius: var(--radius-small); }
+.theme-preview .preview-bar { position: absolute; inset: 0 0 auto; height: var(--s4); }
+.theme-preview .preview-window { position: absolute; inset: var(--s6) var(--s4) var(--s2); display: grid; align-content: center; gap: var(--s2); padding: var(--s2) var(--s3); }
+.theme-preview .preview-line { display: block; width: 60%; height: var(--s2); }
+.theme-preview .preview-button { display: block; width: var(--s7); height: var(--s3); }
+/* The swatches are the themes' own colours, written out: they must not follow the page */
+.theme-preview.standard { background: hsl(220, 20%, 97%); box-shadow: inset 0 0 0 1px hsl(213, 16%, 89%); }
+.theme-preview.standard .preview-bar { background: hsl(215, 89%, 14%); }
+.theme-preview.standard .preview-window { background: hsl(0, 0%, 100%); border-radius: var(--s1); box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.15); }
+.theme-preview.standard .preview-line { background: hsl(213, 16%, 82%); border-radius: var(--s1); }
+.theme-preview.standard .preview-button { background: hsl(226, 82%, 55%); border-radius: var(--s1); }
+.theme-preview.halloween { background: hsl(270, 25%, 6%) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180' fill='none' stroke='rgb(236,226,210)' stroke-width='1'%3E%3Cpath d='M0 0L180.0 0.0M0 0L173.9 46.6M0 0L155.9 90.0M0 0L127.3 127.3M0 0L90.0 155.9M0 0L46.6 173.9M0 0L0.0 180.0M34.0 0.0Q29.0 3.8 32.8 8.8Q27.0 11.2 29.4 17.0Q23.2 17.8 24.0 24.0Q17.8 23.2 17.0 29.4Q11.2 27.0 8.8 32.8Q3.8 29.0 0.0 34.0M70.0 0.0Q59.7 7.9 67.6 18.1Q55.6 23.0 60.6 35.0Q47.8 36.6 49.5 49.5Q36.6 47.8 35.0 60.6Q23.0 55.6 18.1 67.6Q7.9 59.7 0.0 70.0M108.0 0.0Q92.1 12.1 104.3 28.0Q85.8 35.5 93.5 54.0Q73.7 56.5 76.4 76.4Q56.5 73.7 54.0 93.5Q35.5 85.8 28.0 104.3Q12.1 92.1 0.0 108.0M146.0 0.0Q124.5 16.4 141.0 37.8Q116.0 48.0 126.4 73.0Q99.6 76.4 103.2 103.2Q76.4 99.6 73.0 126.4Q48.0 116.0 37.8 141.0Q16.4 124.5 0.0 146.0'/%3E%3C/svg%3E") no-repeat left var(--s4) / var(--s7); }
+.theme-preview.halloween .preview-bar { background: hsl(270, 35%, 12%) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 44' fill='rgb(236,226,210)'%3E%3Cpath transform='translate(4 18) scale(1.1)' d='M12 3l1-2 1 2.5c1.5-.3 2.8.4 3.6 1.6C20 4 22.5 4.5 24 7c-1.8-.6-3.4-.2-4.4 1-.9-.8-2.2-1-3.3-.4-.6-1-1.7-1.5-2.8-1.2L12 9l-1.5-2.6c-1.1-.3-2.2.2-2.8 1.2-1.1-.6-2.4-.4-3.3.4-1-1.2-2.6-1.6-4.4-1 1.5-2.5 4-3 6.4-1.9C7.2 3.9 8.5 3.2 10 3.5L11 1z'/%3E%3Cpath transform='translate(58 4) scale(.8) rotate(-12 12 5)' d='M12 3l1-2 1 2.5c1.5-.3 2.8.4 3.6 1.6C20 4 22.5 4.5 24 7c-1.8-.6-3.4-.2-4.4 1-.9-.8-2.2-1-3.3-.4-.6-1-1.7-1.5-2.8-1.2L12 9l-1.5-2.6c-1.1-.3-2.2.2-2.8 1.2-1.1-.6-2.4-.4-3.3.4-1-1.2-2.6-1.6-4.4-1 1.5-2.5 4-3 6.4-1.9C7.2 3.9 8.5 3.2 10 3.5L11 1z' fill-opacity='.8'/%3E%3Cpath transform='translate(100 22) scale(.6) rotate(10 12 5)' d='M12 3l1-2 1 2.5c1.5-.3 2.8.4 3.6 1.6C20 4 22.5 4.5 24 7c-1.8-.6-3.4-.2-4.4 1-.9-.8-2.2-1-3.3-.4-.6-1-1.7-1.5-2.8-1.2L12 9l-1.5-2.6c-1.1-.3-2.2.2-2.8 1.2-1.1-.6-2.4-.4-3.3.4-1-1.2-2.6-1.6-4.4-1 1.5-2.5 4-3 6.4-1.9C7.2 3.9 8.5 3.2 10 3.5L11 1z' fill-opacity='.6'/%3E%3C/svg%3E") no-repeat center / auto 80%; }
+.theme-preview.halloween .preview-window { background: hsl(270, 20%, 12%); border-radius: var(--s1); }
+.theme-preview.halloween .preview-line { background: hsl(40, 30%, 80%); border-radius: var(--s1); }
+.theme-preview.halloween .preview-button { background: hsl(28, 95%, 58%); border-radius: var(--s1); }
+.theme-preview.retro { background: hsl(180, 100%, 25%); }
+.theme-preview.retro .preview-bar { background: hsl(0, 0%, 75%); box-shadow: inset 0 -1px hsl(0, 0%, 4%), inset 0 1px hsl(0, 0%, 100%); }
+.theme-preview.retro .preview-window { background: hsl(0, 0%, 75%); box-shadow: inset -1px -1px hsl(0, 0%, 4%), inset 1px 1px hsl(0, 0%, 100%), inset -2px -2px hsl(0, 0%, 50%); }
+.theme-preview.retro .preview-window::before { content: ""; position: absolute; inset: 2px 2px auto; height: var(--s2); background: linear-gradient(90deg, hsl(240, 100%, 25%), hsl(204, 86%, 44%)); }
+.theme-preview.retro .preview-line { background: hsl(0, 0%, 100%); box-shadow: inset 1px 1px hsl(0, 0%, 50%); }
+.theme-preview.retro .preview-button { background: hsl(0, 0%, 75%); box-shadow: 0 0 0 1px hsl(0, 0%, 0%), inset -1px -1px hsl(0, 0%, 4%), inset 1px 1px hsl(0, 0%, 100%); }
+:root[data-theme="retro"] .option:has(input[type="radio"]) .letter { border-radius: 50%; }      /* radio buttons were round */

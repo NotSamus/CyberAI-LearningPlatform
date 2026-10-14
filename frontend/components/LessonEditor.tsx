@@ -1,13 +1,20 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowDown, ArrowUp, CircleAlert, Copy, Eye, Plus, Send, Trash2, Undo2, Users, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import LessonRail, { leftLesson } from "@/components/LessonRail";
 import Markdown from "@/components/Markdown";
+import Menu from "@/components/Menu";
+import PageHeader from "@/components/PageHeader";
+import { Label, publishLabel } from "@/components/Status";
+import FileDrop from "@/components/teach/FileDrop";
+import LessonTabs from "@/components/teach/LessonTabs";
 import { api, type Course, type ManagedAssignment } from "@/lib/api";
 import { formatWhen } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import {
-  BLOCK_LABELS, BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, duplicate, importText, newId, youtubeId,
+  BLOCK_LABELS, BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, duplicate, importText, newId, outline, youtubeId,
   type Block, type Kind, type LessonDraft, type ManagedLesson, type Tone,
 } from "@/lib/lessons";
 
@@ -29,8 +36,9 @@ function toSave(title: string, summary: string, audience: string, blocks: Block[
   });
 }
 
-// Settings > Lessons > a lesson: the page a lesson is written on. Everything typed is saved a moment
-// later as the working copy; students get it when Publish is pressed.
+// Teach > Lessons > a lesson: the page a lesson is written on. Everything typed is saved a moment
+// later as the working copy; students get it when Publish is pressed. The title and the summary are
+// typed in the page's header, where they will stand for students too.
 export default function LessonEditor({ lessonId }: { lessonId: string }) {
   const router = useRouter();
   const [lesson, setLesson] = useState<ManagedLesson | null>(null);
@@ -122,7 +130,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     window.addEventListener("beforeunload", warn);
     return () => {
       window.removeEventListener("beforeunload", warn);
-      save();
+      leftLesson(save());       // the list beside the next lesson waits for this, to show what was just written
     };
   }, [save]);
 
@@ -230,13 +238,44 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     if (await save()) router.push(`/lessons/${lessonId}`);
   }
 
-  if (loadError) return <><p><Link href="/settings/lessons">← Lessons</Link></p><p className="error" role="alert">{loadError}</p></>;
-  if (!lesson) return <p className="muted">Loading…</p>;
+  const upToDate = saving === "saved" && !lesson?.changed;
+  // The lesson as it is on screen, for the list beside the editor, and the topics its headings make.
+  const live = useMemo(
+    () => lesson && { ...lesson, title: title.trim() || lesson.title, changed: lesson.published && !upToDate, blocks_count: blocks.length },
+    [lesson, title, upToDate, blocks.length],
+  );
+  const topics = useMemo(() => outline(blocks), [blocks]);
+  const rail = <LessonRail currentId={Number(lessonId)} live={live} topics={topics} />;
+  const tabs = <LessonTabs id={lessonId} />;
+  const crumbs = [{ label: "Lessons", href: "/teach/lessons" }];
 
-  const upToDate = saving === "saved" && !lesson.changed;
+  if (loadError) {
+    return (
+      <div className="writing">
+        <PageHeader crumbs={crumbs} title="Lesson" tabs={tabs} />
+        {rail}
+        <div className="editor"><p className="error" role="alert">{loadError}</p></div>
+      </div>
+    );
+  }
+  if (!lesson) {
+    return (
+      <div className="writing">
+        <PageHeader crumbs={crumbs} title="Lesson" tabs={tabs} />
+        {rail}
+        <div className="editor"><p className="muted">Loading…</p></div>
+      </div>
+    );
+  }
+
+  // What students see of it right now, in a few words, next to whether it is saved.
+  const seen = !lesson.published ? "Students cannot see this lesson until you publish it."
+    : upToDate ? "Students see the lesson as it is here."
+      : `Students still see the version of ${formatWhen(lesson.published_at)}.`;
+
   return (
     <div
-      className="editor"
+      className="writing"
       onPaste={(e) => {
         // Only when a picture is all there is: text copied from a document often carries a picture of itself.
         const found = pictures(e.clipboardData.files);
@@ -252,54 +291,67 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
         addPictures(found);
       }}
     >
-      <div className="editor-bar">
-        <Link href="/settings/lessons">← Lessons</Link>
-        <span className="muted" role="status">
-          {saving === "saved" ? "Saved" : saving === "failed" ? "Not saved" : "Saving…"}
-        </span>
-        {saving === "failed" && <button className="secondary" onClick={save}>Try again</button>}
-        <span className="spacer" />
-        <label>
-          For{" "}
-          <select value={audience} onChange={(e) => setAudience(e.target.value)}>
-            <option value="none">Nobody yet</option>
-            <option value="everyone">All students</option>
-            {courses.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.student_ids.length})</option>)}
-          </select>
-        </label>
-        <button className="secondary" onClick={preview}>Preview</button>
-        {lesson.published && <button className="secondary" disabled={busy} onClick={unpublish}>Unpublish</button>}
-        <button disabled={busy || (lesson.published && upToDate)} onClick={publish}>
-          {busy ? "Publishing…" : lesson.published ? "Publish changes" : "Publish"}
-        </button>
-      </div>
-
-      <p className="badges">
-        {!lesson.published && <><span className="badge draft">Draft</span><span className="muted">Students cannot see this lesson until you publish it.</span></>}
-        {lesson.published && upToDate && <><span className="badge live">Published</span><span className="muted">Students see the lesson as it is here.</span></>}
-        {lesson.published && !upToDate && (
+      <PageHeader
+        crumbs={[...crumbs, { label: title.trim() || lesson.title }]}
+        title={
+          <input
+            className="lesson-title" value={title} maxLength={120} placeholder="Lesson title" aria-label="Lesson title"
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        }
+        status={<Label standing={publishLabel({ published: lesson.published, changed: !upToDate })} />}
+        description={
+          <input
+            className="lesson-summary" value={summary} maxLength={300} aria-label="Summary"
+            placeholder="One line about this lesson, shown on its card (optional)"
+            onChange={(e) => setSummary(e.target.value)}
+          />
+        }
+        meta={
           <>
-            <span className="badge draft">Changes not published</span>
-            <span className="muted">Students still see the version of {formatWhen(lesson.published_at)}.</span>
+            <label className="fact">
+              <Users aria-hidden />For
+              <select value={audience} onChange={(e) => setAudience(e.target.value)}>
+                <option value="none">Nobody yet</option>
+                <option value="everyone">All students</option>
+                {courses.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.student_ids.length})</option>)}
+              </select>
+            </label>
+            <span role="status">{saving === "saved" ? "Saved" : saving === "failed" ? "Not saved" : "Saving…"}</span>
+            {saving === "failed" && <button className="text-button" onClick={save}>Try again</button>}
+            <span>{seen}</span>
           </>
-        )}
-      </p>
+        }
+        actions={
+          <>
+            <button className="secondary" onClick={preview}><Eye aria-hidden />Preview</button>
+            <button disabled={busy || (lesson.published && upToDate)} onClick={publish}>
+              <Send aria-hidden />{busy ? "Publishing…" : lesson.published ? "Publish changes" : "Publish"}
+            </button>
+            {lesson.published && (
+              <Menu label="More for this lesson" items={[{ label: "Unpublish", icon: Undo2, disabled: busy, onSelect: unpublish }]} />
+            )}
+          </>
+        }
+        tabs={tabs}
+      />
+      {rail}
+
+    <div className="editor">
+      {title.trim() === "" && <p className="error">A lesson needs a title: until it has one, the earlier title is kept.</p>}
       {lesson.published && audience === "none" && (
         <p className="error">Published, but given to nobody: no student can see it. Choose who it is for, above.</p>
       )}
       {error && <p className="error" role="alert">{error}</p>}
       {problems && <p className="error log" role="alert">Not published yet:{"\n"}{problems}</p>}
-
-      <input
-        className="lesson-title" value={title} maxLength={120} placeholder="Lesson title" aria-label="Lesson title"
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      {title.trim() === "" && <p className="error">A lesson needs a title: until it has one, the earlier title is kept.</p>}
-      <input
-        className="lesson-summary" value={summary} maxLength={300} aria-label="Summary"
-        placeholder="One line about this lesson, shown on its card (optional)"
-        onChange={(e) => setSummary(e.target.value)}
-      />
+      {/* The header is out of sight while writing further down: a failed save shows here too, in a
+          corner of the screen, until a save goes through. */}
+      {saving === "failed" && (
+        <p className="save-failed" role="alert">
+          <CircleAlert aria-hidden />Your last changes are not saved.
+          <button className="text-button" onClick={save}>Try again</button>
+        </p>
+      )}
 
       {blocks.map((block, index) => (
         <Fragment key={block.id}>
@@ -317,10 +369,10 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
             <div className="block-bar">
               <span className="check-label">{BLOCK_LABELS[block.type]}</span>
               <span className="spacer" />
-              <button className="icon" title="Move up" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}>↑</button>
-              <button className="icon" title="Move down" aria-label="Move down" disabled={index === blocks.length - 1} onClick={() => move(index, 1)}>↓</button>
-              <button className="icon" title="Duplicate" aria-label="Duplicate" onClick={() => insert(index + 1, duplicate(block))}>⧉</button>
-              <button className="icon danger" title="Delete" aria-label="Delete" onClick={() => remove(index)}>×</button>
+              <button className="icon" title="Move up" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden /></button>
+              <button className="icon" title="Move down" aria-label="Move down" disabled={index === blocks.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden /></button>
+              <button className="icon" title="Duplicate" aria-label="Duplicate" onClick={() => insert(index + 1, duplicate(block))}><Copy aria-hidden /></button>
+              <button className="icon danger" title="Delete" aria-label="Delete" onClick={() => remove(index)}><Trash2 aria-hidden /></button>
             </div>
             {block.type === "text" && (
               <TextEditor
@@ -372,7 +424,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
                 </select>
                 <p className="muted">
                   Readers get a link to open the notebook. Only students the assignment was given to see the link:
-                  give it to them under <Link href="/settings/assignments">Assignments</Link>.
+                  give it to them under <Link href="/teach/assignments">Assignments</Link>.
                 </p>
               </>
             )}
@@ -391,6 +443,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
         press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> for a new text block below, and paste or drop pictures anywhere.
       </p>
       <ImportText onImport={(made) => { setBlocks((all) => [...all, ...made]); setFocus(made[0]?.id ?? null); }} />
+    </div>
     </div>
   );
 }
@@ -416,7 +469,7 @@ function AddHere({ onAdd }: { onAdd: (kind: Kind) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`add-here ${open ? "open" : ""}`}>
-      <button className="icon" title="Add a block here" aria-label="Add a block here" aria-expanded={open} onClick={() => setOpen(!open)}>+</button>
+      <button className="icon" title="Add a block here" aria-label="Add a block here" aria-expanded={open} onClick={() => setOpen(!open)}><Plus aria-hidden /></button>
       {open && BLOCK_MENU.map((item) => (
         <button key={item.kind} className="secondary" onClick={() => { setOpen(false); onAdd(item.kind); }}>{item.label}</button>
       ))}
@@ -449,7 +502,7 @@ function TextEditor({ block, onChange, onSlash, onEmptyBackspace }: {
     const edit = () => { takeCursor.current = true; setEditing(true); };
     return (
       <div className="rendered" tabIndex={0} data-focus={block.id} title="Click to edit" onClick={edit} onFocus={edit}>
-        <Markdown text={block.text} />
+        <Markdown text={block.text} anchors={block.id} />
       </div>
     );
   }
@@ -555,7 +608,7 @@ function ChoiceEditor({ block, onChange, onFocus }: {
               type="checkbox" checked={option.correct} title="This option is correct" aria-label={`Option ${index + 1} is correct`}
               onChange={(e) => setOption(option.id, { correct: e.target.checked })}
             />
-            <button className="icon danger" title="Remove this option" aria-label={`Remove option ${index + 1}`} onClick={() => removeOption(index)}>×</button>
+            <button className="icon danger" title="Remove this option" aria-label={`Remove option ${index + 1}`} onClick={() => removeOption(index)}><X aria-hidden /></button>
           </li>
         ))}
       </ul>
@@ -606,7 +659,7 @@ function PictureEditor({ block, lessonId, upload, onChange }: {
 }) {
   const [busy, setBusy] = useState(false);
 
-  async function chosen(file: File | undefined) {
+  async function chosen(file: File | null) {
     if (!file) return;
     setBusy(true);
     const image_id = await upload(file);
@@ -616,13 +669,10 @@ function PictureEditor({ block, lessonId, upload, onChange }: {
 
   if (block.image_id === null) {
     return (
-      <p className="row">
-        <input
-          type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-focus={block.id} disabled={busy}
-          aria-label="Picture file" onChange={(e) => chosen(e.target.files?.[0])}
-        />
-        <span className="muted">{busy ? "Uploading…" : "PNG, JPEG, GIF or WebP, up to 5 MB. Pasting or dropping a picture works too."}</span>
-      </p>
+      <FileDrop
+        accept="image/png,image/jpeg,image/gif,image/webp" what="a picture" busy={busy} focusId={block.id} onFile={chosen}
+        hint="PNG, JPEG, GIF or WebP, up to 5 MB. Pasting a picture anywhere in the lesson works too."
+      />
     );
   }
   return (

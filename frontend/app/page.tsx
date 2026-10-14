@@ -1,15 +1,22 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import DueDate from "@/components/DueDate";
-import Status from "@/components/Status";
+import { BookOpen } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
+import Announcements from "@/components/learn/Announcements";
+import CourseSection from "@/components/learn/CourseSection";
+import DueSoon from "@/components/learn/DueSoon";
+import TeachStrip from "@/components/learn/TeachStrip";
+import UpNext, { SHOWN, whatIsNext } from "@/components/learn/UpNext";
+import { byCourse } from "@/components/learn/courses";
 import { api, type Announcement, type MyAssignment } from "@/lib/api";
-import { formatWhen } from "@/lib/dates";
 import type { MyLesson } from "@/lib/lessons";
 import { useMe } from "@/lib/useMe";
 
-type Group = { lessons: MyLesson[]; assignments: MyAssignment[] };
-
+// Home. For a student: what to do next, what is due, the announcements, and then every lesson and
+// assignment they have, course by course. For a teacher: the same lists as their students see
+// them, drafts included, under a line about what waits for them in Teach.
 export default function Home() {
   const me = useMe();
   const [lessons, setLessons] = useState<MyLesson[] | null>(null);
@@ -25,108 +32,63 @@ export default function Home() {
     api<Announcement[]>("/announcements").then(setNews).catch(() => {});
   }, []);
 
-  // One group per course, with its lessons (in the order the teachers put them in) and its
-  // assignments (soonest due date first). What belongs to no course comes last.
-  const groups = new Map<string, Group>();
-  const group = (course: string | null) => {
-    if (!groups.has(course ?? "")) groups.set(course ?? "", { lessons: [], assignments: [] });
-    return groups.get(course ?? "")!;
-  };
-  for (const lesson of lessons ?? []) if (lesson.course) group(lesson.course).lessons.push(lesson);
-  for (const a of items ?? []) if (a.course) group(a.course).assignments.push(a);
-  const inCourses = groups.size > 0;
-  for (const lesson of lessons ?? []) if (!lesson.course) group(null).lessons.push(lesson);
-  for (const a of items ?? []) if (!a.course) group(null).assignments.push(a);
-
+  const teacher = Boolean(me?.can_teach);
+  // Until the account is known, nothing that depends on whose it is: a teacher must not see a
+  // student's "Up next" for a moment, made of their own progress.
+  const known = me !== null;
   const loaded = lessons !== null && items !== null;
+  const empty = loaded && lessons.length === 0 && items.length === 0;
+
+  // One line on where the student stands, over everything they have.
+  const standing: string[] = [];
+  if (lessons && lessons.length > 0) {
+    const completed = lessons.filter((lesson) => lesson.completed_at).length;
+    standing.push(`${completed} of ${lessons.length} ${lessons.length === 1 ? "lesson" : "lessons"} completed`);
+  }
+  if (items && items.length > 0) {
+    const open = items.filter((a) => !a.submission).length;
+    standing.push(open === 0 ? "every assignment handed in" : `${open} ${open === 1 ? "assignment" : "assignments"} to hand in`);
+  }
+  // The assignments Up next shows, so that Due soon does not list them a second time.
+  const upNext = !teacher && lessons && items
+    ? whatIsNext(lessons, items).slice(0, SHOWN).flatMap((item) => (item.key.startsWith("assignment-") ? [Number(item.key.slice(11))] : []))
+    : [];
+
+  const summary = teacher
+    ? "What your students see, drafts included. Your own progress is not shown here."
+    : loaded && standing.length > 0 ? standing.join(" · ") : undefined;
+
   return (
-    <main className="page">
-      {news.length > 0 && (
-        <section className="announcements" aria-label="Announcements">
-          {news.slice(0, 5).map((n) => (
-            <article key={n.id} className="card">
-              <p className="badges">
-                <strong>{n.title}</strong>
-                {n.course && <span className="badge">{n.course}</span>}
-                <span className="muted">{formatWhen(n.created_at)}</span>
-              </p>
-              {n.body && <p className="description">{n.body}</p>}
-            </article>
-          ))}
-        </section>
+    <main className="page home">
+      {teacher && <TeachStrip />}
+      <PageHeader title={teacher ? "Lessons and assignments" : "My lessons and assignments"} description={known ? summary : undefined} />
+      {error && <p className="error" role="alert">Could not load this page: {error}</p>}
+      {(!loaded || !known) && !error && <p className="muted">Loading…</p>}
+
+      {loaded && known && empty && (
+        teacher ? (
+          <EmptyState
+            icon={BookOpen} title="Nothing here yet"
+            action={<>
+              <Link href="/teach/lessons" className="button">Write a lesson</Link>
+              <Link href="/teach/assignments/new" className="button secondary">Upload a notebook</Link>
+            </>}
+          >
+            Lessons you write and notebooks you upload show up here, the way your students will see them.
+          </EmptyState>
+        ) : (
+          <EmptyState icon={BookOpen} title="Nothing here yet">
+            Nothing has been given to you yet. New lessons and assignments will show up here.
+          </EmptyState>
+        )
       )}
 
-      <h1>{me?.can_teach ? "Lessons and assignments" : "My lessons and assignments"}</h1>
-      {error && <p className="error" role="alert">Could not load this page: {error}</p>}
-      {!loaded && !error && <p className="muted">Loading…</p>}
-      {loaded && groups.size === 0 && (
-        me?.can_teach
-          ? (
-            <p className="muted">
-              Nothing here yet. Write a lesson or upload a notebook under <Link href="/settings">Settings</Link>.
-            </p>
-          )
-          : <p className="muted">Nothing has been given to you yet. New lessons and assignments will show up here.</p>
-      )}
-      {loaded && [...groups].map(([course, { lessons, assignments }]) => (
-        <section key={course}>
-          {(course || inCourses) && <h2>{course || "Other"}</h2>}
-          {lessons.length > 0 && (
-            <>
-              <p className="check-label group-label">Lessons</p>
-              <ul className="grid">
-                {lessons.map((lesson) => (
-                  <li key={lesson.id}>
-                    <Link href={`/lessons/${lesson.id}`} className="card">
-                      <h3>{lesson.title}</h3>
-                      <p className="muted clamp">{lesson.summary}</p>
-                      <span className="badges">
-                        {!lesson.published && <span className="badge draft">Draft</span>}
-                        {/* A teacher's own progress in a lesson means nothing: students get the status. */}
-                        {me && !me.can_teach && <LessonStatus lesson={lesson} />}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {assignments.length > 0 && (
-            <>
-              <p className="check-label group-label">Assignments</p>
-              <ul className="grid">
-                {assignments.map((a) => (
-                  <li key={a.id}>
-                    <Link href={`/assignments/${a.id}`} className="card">
-                      <h3>{a.title}</h3>
-                      <p className="muted clamp">{a.description}</p>
-                      <span className="badges">
-                        {!a.published && <span className="badge draft">Draft</span>}
-                        {/* A teacher's own progress on an assignment means nothing: students get the status. */}
-                        {me && !me.can_teach && <Status assignment={a} />}
-                        <DueDate due_at={a.due_at} done={Boolean(a.submission)} />
-                        {a.requires_gpu && <span className="badge gpu">GPU</span>}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
+      {loaded && known && !empty && !teacher && <UpNext lessons={lessons} assignments={items} />}
+      {loaded && known && !empty && <DueSoon assignments={items} asTeacher={teacher} shown={upNext} />}
+      <Announcements items={news} />
+      {loaded && known && byCourse(lessons, items).map((group) => (
+        <CourseSection key={group.id ?? "everyone"} group={group} asTeacher={teacher} />
       ))}
     </main>
-  );
-}
-
-// Where a student is with a lesson: not started, in progress (with the knowledge checks done), completed.
-function LessonStatus({ lesson }: { lesson: MyLesson }) {
-  if (lesson.completed_at) return <span className="badge live">Completed</span>;
-  if (!lesson.opened_at) return <span className="badge">Not started</span>;
-  return (
-    <>
-      <span className="badge">In progress</span>
-      {lesson.questions > 0 && <span className="muted">{lesson.answered} of {lesson.questions} checks done</span>}
-    </>
   );
 }

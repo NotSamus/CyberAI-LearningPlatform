@@ -1,0 +1,222 @@
+/* What students use: home, a lesson as it is read, and a notebook open in the page.
+   Built only from the tokens and shared pieces in ../globals.css. */
+
+/* Code is a dark block in light and in dark mode. These are the only colours of this file that are
+   not tokens of globals.css: they are defined once, here. */
+:root {
+  --code-bg: hsl(222, 22%, 13%);
+  --code-text: hsl(220, 20%, 88%);
+  --code-head: hsl(222, 20%, 18%);      /* the strip above a code block, with its language and Copy */
+  --code-muted: hsl(220, 14%, 66%);     /* the language, and the Copy button */
+  --code-edge: transparent;
+  /* The parts of the code, in colour (lib/highlight.ts marks them). Each is at least 4.5:1 on the
+     code's background, here and in the dark version; the themes have their own. */
+  --code-keyword: hsl(286, 60%, 72%);   /* def, if, return, import */
+  --code-string: hsl(95, 38%, 62%);
+  --code-number: hsl(29, 70%, 65%);     /* numbers, and True, False, None */
+  --code-comment: hsl(220, 12%, 60%);
+  --code-function: hsl(207, 82%, 68%);  /* the names of functions where they are defined */
+  --code-builtin: hsl(187, 50%, 58%);   /* print, len, range */
+  --code-type: hsl(39, 67%, 69%);       /* class names and types */
+  --code-meta: hsl(355, 65%, 72%);      /* decorators, the #! line */
+}
+@media (prefers-color-scheme: dark) {
+  /* Darker than the page, with a line around it so that it does not melt into it */
+  :root {
+    --code-bg: hsl(220, 18%, 5%);
+    --code-edge: var(--edge);
+  }
+}
+
+/* --- Home --------------------------------------------------------------------------------------- */
+.home > section { margin-top: var(--s7); }
+.home > .page-header + section { margin-top: 0; }
+.home > section > h2 { margin: 0 0 var(--s3); }
+/* For teachers, above everything: what waits for them in Teach */
+.teach-strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s5); margin-bottom: var(--s5); padding: var(--s3) var(--s4); background: var(--card); color: var(--text); border: 1px solid var(--edge); border-left: 4px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow-1); text-decoration: none; }
+.teach-strip:hover { box-shadow: var(--shadow-2); }
+.teach-strip .fact { color: var(--text); }
+.teach-strip .fact svg { color: var(--muted); }
+.teach-strip .go { display: inline-flex; align-items: center; gap: var(--s1); margin-left: auto; color: var(--accent); font-size: var(--t-sm); font-weight: var(--bold); }
+/* Why something is listed: in the colour of how pressing it is */
+.home .reason { margin: 0; color: var(--muted); font-size: var(--t-sm); }
+.home .reason.warn { color: var(--warn); }
+.home .reason.bad { color: var(--error); }
+/* Up next: the one thing to do now, then a few more */
+.next-list > li.next-main { flex-wrap: nowrap; gap: var(--s5); padding: var(--s5); }
+.next-main .what { display: grid; flex: 1; gap: var(--s1); min-width: 0; }
+.next-main .what > * { margin: 0; }
+.next-main h3 { font-size: var(--t-xl); }
+.home .next-main .reason { font-size: var(--t-base); }
+.next-main .progress { width: calc(var(--w-text) / 2); max-width: 100%; margin-top: var(--s2); }
+.home .list .summary { color: var(--muted); font-size: var(--t-sm); }
+/* Due soon: short rows */
+.home .list.compact > li { padding: var(--s3) var(--s4); }
+/* Announcements: the newest few, each cut to two lines until it is opened */
+.news > li { align-items: flex-start; }
+.news .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); margin: 0; }
+.news .body { margin: 0; white-space: pre-line; }
+.news .text-button { justify-self: start; }
+/* One section per course: its name and size, how far the student is, and everything in it */
+.course-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); margin-bottom: var(--s3); }
+.course-head .progress { width: var(--w-menu); margin-left: auto; }
+.course-head h2 { margin: 0; font-size: var(--t-xl); }
+
+/* --- A notebook assignment, before it is opened -------------------------------------------------- */
+.assignment { max-width: var(--w-text); }
+.assignment .page-header { margin-bottom: var(--s3); }
+.assignment > .meta { margin-bottom: var(--s5); }
+.assignment .start { display: grid; gap: var(--s5); height: auto; }
+.assignment .steps { display: grid; gap: var(--s4); margin: 0; padding: 0; list-style: none; }
+.assignment .steps li { display: grid; grid-template-columns: var(--s6) minmax(0, 1fr); align-items: start; column-gap: var(--s3); }
+.assignment .steps li > div { display: grid; gap: var(--s1); padding-top: var(--s1); }
+.assignment .steps .number { display: inline-grid; place-items: center; width: var(--s6); height: var(--s6); background: var(--accent-tint); color: var(--info); border-radius: var(--pill); font-size: var(--t-sm); font-weight: var(--bold); }
+.assignment .steps .muted { font-size: var(--t-sm); }
+.assignment .start-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+
+/* --- A notebook open in the page, and a submission's result ------------------------------------- */
+.workspace { display: flex; flex-direction: column; height: calc(100vh - var(--bar-h)); height: calc(100dvh - var(--bar-h)); }
+.workspace-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); padding: var(--s2) var(--s4); background: var(--card); border-bottom: 1px solid var(--border); }
+.workspace-bar .back { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--t-sm); text-decoration: none; }
+.workspace iframe { flex: 1; width: 100%; background: #fff; border: 0; }
+.bar-message { max-height: 45vh; margin: 0; padding: var(--s2) var(--s4); overflow-y: auto; background: var(--card); border-bottom: 1px solid var(--border); }
+.bar-message .result { margin-top: 0; padding: 0; border: 0; box-shadow: none; }
+.result { display: grid; gap: var(--s3); margin-top: var(--s5); }
+.result p, .result h3 { margin: 0; }
+.result h3 { display: flex; align-items: center; gap: var(--s2); }
+.result h3 svg { color: var(--muted); }
+
+/* --- Lessons: reading them ---------------------------------------------------------------------- */
+.lesson { max-width: var(--w-text); }
+.lesson .page-header h1 { font-size: var(--t-3xl); }
+.lesson .page-header { margin-bottom: var(--s4); }
+.lesson .page-header .description { font-size: var(--t-lg); }      /* the summary, as a lede */
+.lesson-facts { display: grid; justify-items: start; gap: var(--s3); }
+.lesson-facts .progress { width: calc(var(--w-text) / 2); max-width: 100%; }
+.lesson > .notice { margin-top: 0; margin-bottom: var(--s5); }
+.lesson-blocks { display: grid; gap: var(--s5); margin-top: var(--s6); }
+.lesson-blocks > * { min-width: 0; }
+.lesson-blocks :is(h1, h2, h3) { scroll-margin-top: var(--s5); }
+/* The lesson's own text reads larger than the interface around it (checks, callouts, menus stay at
+   16 px, code at 14). The editor shows its text blocks the same way. */
+:is(.lesson-blocks, .rendered) > .markdown { font-size: var(--t-lg); line-height: 1.7; }
+/* Headings step down from the lesson's title (30): # 24, ## 20, ### 18 and bold, like the text */
+:is(.lesson-blocks, .rendered) > .markdown h1 { font-size: var(--t-2xl); }
+:is(.lesson-blocks, .rendered) > .markdown h2 { font-size: var(--t-xl); }
+:is(.lesson-blocks, .rendered) > .markdown h3 { font-size: var(--t-lg); }
+/* Code: a dark block, in the text and as a code block of its own. (A bare <pre> is an error log or
+   a test report, and keeps the light look of globals.css.) */
+.markdown pre, figure.code pre { background: var(--code-bg); color: var(--code-text); border: 1px solid var(--code-edge); }
+figure.code { margin: 0; }
+/* The parts of the code, in colour */
+.hljs :is(.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-name) { color: var(--code-keyword); }
+.hljs :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-template-tag, .hljs-char) { color: var(--code-string); }
+.hljs :is(.hljs-number, .hljs-literal, .hljs-symbol) { color: var(--code-number); }
+.hljs :is(.hljs-comment, .hljs-quote) { color: var(--code-comment); font-style: italic; }
+.hljs :is(.hljs-title, .hljs-section, .hljs-selector-id) { color: var(--code-function); }
+.hljs :is(.hljs-built_in, .hljs-attr, .hljs-attribute, .hljs-variable.language_) { color: var(--code-builtin); }
+.hljs :is(.hljs-type, .hljs-title.class_, .hljs-selector-class) { color: var(--code-type); }
+.hljs :is(.hljs-meta, .hljs-deletion) { color: var(--code-meta); }
+.hljs .hljs-strong { font-weight: var(--bold); }
+.hljs .hljs-emphasis { font-style: italic; }
+figure.code figcaption { display: flex; align-items: center; gap: var(--s2); margin: 0; padding: var(--s1) var(--s1) var(--s1) var(--s4); background: var(--code-head); color: var(--code-muted); border: 1px solid var(--code-edge); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; font-size: var(--t-xs); font-weight: 400; letter-spacing: 0; text-transform: none; }
+figure.code figcaption + pre { border-top-left-radius: 0; border-top-right-radius: 0; }
+figure.code .language { font-family: var(--font-mono); }
+figure.code button.copy { gap: var(--s1); margin-left: auto; padding: var(--s1) var(--s2); background: transparent; color: var(--code-muted); border: 0; border-radius: var(--radius-small); box-shadow: none; font-size: var(--t-xs); font-weight: var(--bold); }
+figure.code button.copy:hover:not(:disabled) { background: var(--code-bg); color: var(--code-text); }
+figure.code button.copy svg.lucide { width: var(--icon-xs); height: var(--icon-xs); }
+/* A note, a tip or a warning: an icon and the word for it in the colour of its kind, the text as usual */
+.callout { display: grid; gap: var(--s1); padding: var(--s3) var(--s4); background: var(--accent-tint); color: var(--text); border-left: 4px solid var(--accent); border-radius: var(--radius); }
+.callout-label { display: inline-flex; align-items: center; gap: var(--s2); margin: 0; color: var(--info); font-weight: var(--bold); }
+.callout.tip { background: var(--good-tint); border-left-color: var(--gpu); }
+.callout.tip .callout-label { color: var(--gpu); }
+.callout.warning { background: var(--warn-tint); border-left-color: var(--warn-line); }
+.callout.warning .callout-label { color: var(--warn); }
+.picture { display: block; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.video { aspect-ratio: 16 / 9; }
+.video iframe { width: 100%; height: 100%; background: #000; border: 0; border-radius: var(--radius); }
+/* A notebook assignment the lesson links to */
+.card.practice { display: flex; align-items: center; gap: var(--s4); height: auto; padding: var(--s4) var(--s5); }
+.card.practice .grow { display: grid; flex: 1; gap: var(--s1); min-width: 0; }
+.card.practice .grow > * { margin: 0; }
+.card.practice .go { display: inline-flex; align-items: center; gap: var(--s1); color: var(--accent); font-size: var(--t-sm); font-weight: var(--bold); }
+/* A knowledge check: a card with a coloured line on top (blue while open, green once right, grey
+   once out of tries), its question in bold, the options as cards, and a band saying how it went */
+.quiz { display: grid; justify-items: start; gap: var(--s4); padding: var(--s5); background: var(--card); border: 1px solid var(--edge); border-top: 4px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow-1); scroll-margin-top: var(--s5); }
+.quiz > * { margin: 0; }
+.quiz > :is(.quiz-head, .markdown, .options, .outcome, form) { justify-self: stretch; }
+.quiz.right { border-top-color: var(--gpu); }
+.quiz.wrong { border-top-color: var(--border-strong); }
+.quiz-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); }
+.quiz-head .check-label { margin: 0; }
+.quiz .tries { color: var(--muted); font-size: var(--t-xs); font-weight: var(--bold); }
+.quiz > .markdown { font-size: var(--t-lg); font-weight: var(--bold); }
+.quiz > .markdown :is(p, ul, ol) { margin: 0; }
+/* An option: a card with a letter in a ring (radio) or a square (checkbox). The real input stays,
+   out of sight, for the keyboard and screen readers; the letter shows what it says. */
+.options { display: grid; gap: var(--s2); }
+.option { position: relative; display: flex; align-items: center; gap: var(--s3); min-height: var(--s7); padding: var(--s2) var(--s4); background: var(--card); border: 1px solid var(--border-strong); border-radius: var(--radius); cursor: pointer; }
+.option input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
+.option .letter { display: inline-grid; flex: none; place-items: center; width: var(--s6); height: var(--s6); color: var(--muted); border: 1px solid var(--border-strong); border-radius: var(--radius-small); font-size: var(--t-sm); font-weight: var(--bold); }
+.option:has(input[type="radio"]) .letter { border-radius: var(--pill); }
+.option .markdown { flex: 1; min-width: 0; }
+.option .markdown p { margin: 0; }
+.option:hover:not(:has(input:disabled)) { background: var(--tint); }
+.option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.option:has(input:checked) { background: var(--accent-tint); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.option:has(input:checked) .letter { background: var(--accent); color: var(--card); border-color: var(--accent); }
+.option:has(input:disabled) { cursor: default; }
+/* Once it is closed: the right answer green, a wrong pick red, the others quiet */
+.quiz:is(.right, .wrong) .option:not(.correct, .incorrect) { background: transparent; color: var(--muted); border-color: var(--border); box-shadow: none; }
+.options .option.correct { background: var(--good-tint); border-color: var(--gpu); box-shadow: none; }
+.options .option.correct .letter { background: var(--gpu); color: var(--card); border-color: var(--gpu); }
+.options .option.incorrect { background: var(--bad-tint); border-color: var(--error); box-shadow: none; }
+.options .option.incorrect .letter { background: var(--error); color: var(--card); border-color: var(--error); }
+.verdict { display: inline-flex; flex: none; align-items: center; gap: var(--s1); font-size: var(--t-xs); font-weight: var(--bold); }
+.verdict.good { color: var(--gpu); }
+.verdict.bad { color: var(--error); }
+/* A written answer: the field and its button on one line; green or red once it is closed */
+.quiz form.written { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.quiz form.written input { flex: 1; max-width: calc(1.5 * var(--w-rail)); }
+.quiz form.written input.correct { background: var(--good-tint); color: var(--text); border-color: var(--gpu); }
+.quiz form.written input.incorrect { background: var(--bad-tint); color: var(--text); border-color: var(--error); }
+/* How it went: try again (yellow), right (green), or the answer shown after the last try (grey) */
+.outcome { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s3) var(--s4); border-left: 4px solid var(--border-strong); border-radius: var(--radius); }
+.outcome > svg.lucide { flex: none; margin-top: var(--s1); }
+.outcome > div { display: grid; gap: var(--s2); min-width: 0; }
+.outcome p { margin: 0; }
+.outcome.again { background: var(--warn-tint); border-left-color: var(--warn-line); }
+.outcome.again > svg.lucide { color: var(--warn); }
+.outcome.right { background: var(--good-tint); border-left-color: var(--gpu); }
+.outcome.right > svg.lucide { color: var(--gpu); }
+.outcome.shown { background: var(--tint); }
+.outcome.shown > svg.lucide { color: var(--muted); }
+/* The end of a lesson: what is left, Mark as complete, and once it is complete, what comes next */
+.lesson-end { display: grid; gap: var(--s4); margin-top: var(--s7); padding-top: var(--s5); border-top: 1px solid var(--border); }
+.lesson-end > p { margin: 0; }
+.lesson-end .finish { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.done-panel { display: grid; gap: var(--s5); height: auto; }
+.done-head { display: flex; align-items: center; gap: var(--s4); }
+.done-head > div { display: grid; gap: var(--s1); }
+.done-head h2 { margin: 0; font-size: var(--t-xl); }
+.done-panel > p, .done-panel > .row { margin: 0; }
+.done-panel > .row p { flex: 1; margin: 0; }
+.next-lesson { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); background: var(--accent-tint); color: var(--text); border-radius: var(--radius); text-decoration: none; }
+.next-lesson:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.next-lesson .grow { display: grid; flex: 1; gap: var(--s1); min-width: 0; }
+.next-lesson .grow > * { margin: 0; }
+.next-lesson strong { font-size: var(--t-lg); }
+.next-lesson > svg.lucide { color: var(--accent); }
+
+/* The menu to the left of a lesson as it is read */
+.lesson-menu { margin-top: var(--s5); }
+@media (min-width: 1100px) {
+  /* Room for it: the menu stands to the left of the lesson and stays in view while reading. */
+  .lesson { position: relative; margin-left: calc((100% - var(--w-text) - var(--w-rail) - var(--s6)) / 2 + var(--w-rail) + var(--s6)); margin-right: 0; }
+  .lesson-menu { position: absolute; top: var(--s6); bottom: 0; left: calc(-1 * (var(--w-rail) + var(--s6))); width: var(--w-rail); margin: 0; }
+  .lesson-menu .rail { top: var(--s5); max-height: calc(100vh - var(--s7)); }
+}
+@media (max-width: 1099px) {
+  /* An iPad: the menu sits under the lesson's title, in a box of its own that scrolls. */
+  .lesson-menu .rail { position: static; max-height: 256px; padding: var(--s3); background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+}

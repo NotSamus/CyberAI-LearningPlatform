@@ -33,15 +33,15 @@ The last command asks for the password twice. It is never written to a file; Pos
 Argon2 hash. The server's database starts empty: accounts made on a laptop are not copied, so create
 them again here, and give the server's admin a long password of its own.
 
-Then log in to the site as that admin and add students and teachers under **Settings > Accounts**.
+Then log in to the site as that admin and add students and teachers under **Admin > Accounts**.
 
-Assignments are uploaded in the site too: **Settings > Assignments** (teachers and admins) > upload a
-notebook, choose who gets it, publish. Notebooks, submissions and grades are stored in Postgres, so there
+Assignments are uploaded in the site too: **Teach > Assignments** (teachers and admins) > Upload notebook,
+choose who gets it, publish. Notebooks, submissions and grades are stored in Postgres, so there
 is no assignments folder to create or copy to the server, and backing up the database backs them up.
 Each student gets their own copy the first time they open an assignment. The project `README.md`
 describes courses, submitting and grading.
 
-Lessons are written in the site as well: **Settings > Lessons**. Their text, questions, pictures and
+Lessons are written in the site as well: **Teach > Lessons**. Their text, questions, pictures and
 what students answered are stored in Postgres too, so the same database backup covers them. Videos in
 lessons are played from `www.youtube-nocookie.com`, so students' browsers must be able to reach YouTube.
 
@@ -54,7 +54,21 @@ docker compose exec backend alembic -c ../sql/alembic.ini upgrade head   # adds 
 ```
 
 Run the migration every time: a new version may need tables the old one did not have (lessons were
-added this way), and until they exist the pages that use them answer with an error.
+added this way, and the column that keeps each account's theme), and until they exist the pages that use them answer with an error.
+
+**Once, when updating to the version that stopped sending the hub token to notebook servers**, replace
+`PLATFORM_HUB_API_TOKEN`: earlier versions sent it to every student's running notebook server, where
+code the student ran could have copied it. Put a new value in `deploy/.env` (from `openssl rand -hex 32`),
+then run `docker compose up -d`: the backend and the hub both restart with it, and the hub forgets the
+old token as it starts. The same update changes the hub's permissions in `jupyterhub/jupyterhub_config.py`,
+which is built into the hub's image: the `--build` above applies it. Until both the hub and the backend
+run the new version, opening and submitting notebooks fail with "The notebook service returned an error".
+`PLATFORM_SESSION_SECRET` is no longer used: a value left in `deploy/.env` is simply ignored.
+
+Every secret in `deploy/.env` must be set, or `docker compose` stops and names the missing one. The
+backend also refuses to start when `PLATFORM_HUB_API_TOKEN`, `OAUTH_CLIENT_SECRET` or `GRADER_TOKEN` is
+shorter than 32 characters, contains `dev-` or is still `change-me` (`api/app/config.py`): generate them
+with `openssl rand -hex 32`.
 
 ### The grading service
 
@@ -82,7 +96,7 @@ things depend on the browser sending the hub's cookie to the hub from a platform
 - Logging in or out of the platform also ends the browser's JupyterHub session, so the next person on
   a shared computer cannot reach the previous person's notebooks. Without a shared parent domain the
   hub session stays open until it expires.
-- The Settings page shows JupyterHub's admin panel in a frame.
+- **Admin > JupyterHub** shows JupyterHub's admin panel in a frame.
 
 Teachers and platform admins (`--admin`) are JupyterHub admins. The hub decides this when that person's
 hub session starts, so after `set-admin` they log out of the platform and in again.
@@ -109,9 +123,14 @@ When `deploy/images/` changes, rebuild the student notebook images too (the firs
 Notebook servers that are already running keep the old image until they are restarted.
 
 How a notebook reaches a student, and a submission the backend: the backend calls that student's
-running notebook server through the hub (`access:servers` in `jupyterhub/jupyterhub_config.py` allows
-it, with `PLATFORM_HUB_API_TOKEN`). That token can therefore read and write files in every notebook
-home: keep it only in `deploy/.env`. To replace it, change it in `deploy/.env` and run
+running notebook server through the hub. For each of these operations it first has the hub make a
+token of that student's own, which opens only that one notebook server, expires after two minutes and
+is deleted as soon as the operation is done; that token is the only one the notebook server sees.
+`PLATFORM_HUB_API_TOKEN` never goes to a notebook server, where code a student runs could read it.
+With it the backend creates and removes hub users, starts and stops their servers, sets their groups
+and makes those tokens (`platform-role` in `jupyterhub/jupyterhub_config.py`). It cannot open a notebook
+server itself, but because it can make a token for any user it still reaches every notebook home in
+the end: keep it only in `deploy/.env`. To replace it, change it in `deploy/.env` and run
 `docker compose up -d`: the hub forgets the old token when it starts.
 
 More account commands (same tool, `api/app/manage.py`):
@@ -119,7 +138,7 @@ More account commands (same tool, `api/app/manage.py`):
 ```bash
 docker compose exec backend python -m app.manage set-admin maria          # or: set-admin maria --remove
 docker compose exec backend python -m app.manage set-password maria       # choose a password; logs the account out everywhere
-docker compose exec backend python -m app.manage create-user maria --name "Maria Lopez"   # same as the Settings form
+docker compose exec backend python -m app.manage create-user maria --name "Maria Lopez"   # same as Add account in the site
 docker compose exec backend python -m app.manage list-users
 ```
 

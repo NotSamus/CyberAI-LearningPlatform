@@ -1,5 +1,9 @@
-"""Shared fixtures. Tests that need a database get a throwaway one on the dev Postgres
-(./dev.sh starts it) and are skipped when that is not running."""
+"""Shared fixtures.
+
+The tests never reach the platform's own database, in development or on the server. They run on a
+Postgres of their own (deploy/docker-compose.test.yml; ./check.sh starts it), where each run makes
+a throwaway database and drops it afterwards. Tests that need a database are skipped when that
+Postgres is not running."""
 import json
 import os
 import subprocess
@@ -9,17 +13,34 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
-from app import auth, submissions
-from app.config import DATABASE_URL
-from app.db import get_db
-from app.jupyter import hub_client
-from app.main import app
+# The test Postgres, and the platform's database as the app would find it (dev's when nothing is set).
+TEST_SERVER_URL = os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://test:test-only-password@localhost:5434/postgres")
+PLATFORM_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://platform:dev-db-password@localhost:5433/platform")
+
+
+def _server(url: str) -> tuple:
+    parsed = make_url(url)
+    host = "localhost" if parsed.host in (None, "", "127.0.0.1", "::1") else parsed.host
+    return host, parsed.port or 5432
+
+
+if _server(TEST_SERVER_URL) == _server(PLATFORM_URL):
+    pytest.exit("TEST_DATABASE_URL points at the platform's own Postgres: the tests must never run there.", returncode=2)
+# Before the app is imported: everything in it that opens a database (its engine, background
+# grading, the command line tool run by some tests) then finds the test Postgres, never another.
+os.environ["DATABASE_URL"] = TEST_SERVER_URL
+
+from fastapi.testclient import TestClient  # noqa: E402  (after DATABASE_URL is set, on purpose)
+
+from app import auth, submissions  # noqa: E402
+from app.db import get_db  # noqa: E402
+from app.jupyter import hub_client  # noqa: E402
+from app.main import app  # noqa: E402
 
 SQL_DIR = Path(__file__).resolve().parents[1] / "sql"
 
@@ -34,8 +55,8 @@ def run_alembic(*args: str, db_url: str) -> None:
 
 @contextmanager
 def throwaway_database():
-    """A new, empty database on the same server as DATABASE_URL, dropped afterwards."""
-    url = make_url(DATABASE_URL)
+    """A new, empty database on the test Postgres, dropped afterwards."""
+    url = make_url(TEST_SERVER_URL)
     admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
     name = f"test_{uuid.uuid4().hex[:8]}"
     try:
@@ -43,7 +64,8 @@ def throwaway_database():
             conn.execute(text(f'CREATE DATABASE "{name}"'))
     except OperationalError:
         admin.dispose()
-        pytest.skip(f"Postgres is not reachable at {url.host}:{url.port} (start it with ./dev.sh)")
+        pytest.skip(f"The test Postgres is not reachable at {url.host}:{url.port} (./check.sh starts it, or: "
+                    "docker compose -f deploy/docker-compose.test.yml up -d --wait)")
     try:
         yield url.set(database=name).render_as_string(hide_password=False)
     finally:

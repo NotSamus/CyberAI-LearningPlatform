@@ -3,7 +3,6 @@ database. The hub is replaced by a stand-in that remembers which files were put 
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient

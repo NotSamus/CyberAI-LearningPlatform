@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app.db import get_db
-from app.models import ROLES, LoginSession, User
+from app.models import ROLES, THEMES, LoginSession, User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -242,3 +242,22 @@ def change_password(body: PasswordChange, request: Request, response: Response, 
         raise HTTPException(400, str(e))
     response.set_cookie(COOKIE_NAME, start_session(db, user), max_age=int(SESSION_TTL.total_seconds()), **_cookie_options())
     return {"changed": True}
+
+
+class ThemeChoice(BaseModel):
+    theme: str
+
+
+@router.put("/theme")
+def choose_theme(body: ThemeChoice, request: Request, db: Session = Depends(get_db)):
+    """A logged-in person chooses how the site looks for their own account (My account >
+    Appearance). Only the names in THEMES are taken."""
+    token = request.cookies.get(COOKIE_NAME)
+    user = user_for_session(db, token) if token else None
+    if user is None:
+        raise HTTPException(401, "not logged in")
+    if body.theme not in THEMES:
+        raise HTTPException(400, "There is no such theme.")
+    user.theme = body.theme
+    db.commit()
+    return {"theme": user.theme}

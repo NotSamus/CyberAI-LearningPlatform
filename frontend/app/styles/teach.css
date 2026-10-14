@@ -1,0 +1,216 @@
+/* The Teach and Admin areas (and My account): their pages, lists, tables and forms, and the lesson
+   editor. Built only from the tokens and shared pieces in ../globals.css. */
+
+/* --- An area's page: under the area's tabs, a header, then the content -------------------------- */
+.area-page { max-width: var(--w-wide); margin: 0 auto; padding: var(--s6) var(--s5); }
+.area-page:has(.writing) { max-width: var(--w-widest); }      /* the lesson editor: room for the list of lessons beside the lesson */
+.area-page.account { max-width: var(--w-text); }
+.area-page > :is(p.error, p.notice) { max-width: var(--w-text); }
+.area-page section + section, .overview + section { margin-top: var(--s7); }
+.area-page section > h2:first-child { margin-top: 0; }
+.area-page > .empty, .area-page section > .empty { background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.hint { max-width: var(--measure); font-size: var(--t-sm); }
+
+/* A section's title, with a count or a line about it beside it */
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); margin-bottom: var(--s3); }
+.section-head h2 { margin: 0; }
+.section-head .muted { font-size: var(--t-sm); }
+.section-head .chip { align-self: center; }
+
+/* What a list shows (a course, all of them...), above the list */
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin-bottom: var(--s4); }
+.filters label { display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--t-sm); font-weight: var(--bold); }
+.filters select { padding: var(--s1) var(--s3); }
+.filters > .muted { font-size: var(--t-sm); }
+
+/* A section with nothing in it: one quiet line */
+.quiet { display: flex; align-items: center; gap: var(--s2); margin: 0; padding: var(--s4) var(--s5); background: var(--card); color: var(--muted); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--t-sm); }
+
+/* --- Rows of a list (.list in globals.css): a tile, the title with where it stands, facts, actions */
+.list .title-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.list .grow > p { margin: 0; }
+.list .summary { color: var(--muted); font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .body { max-width: var(--measure); margin-top: var(--s1); font-size: var(--t-sm); }
+.row-actions { display: flex; align-items: center; gap: var(--s1); margin-left: auto; }
+.list svg.go { color: var(--muted); }
+/* A list whose rows each lead somewhere: the whole row is the link (an iPad has no pointer to aim) */
+.list.links > li { position: relative; }
+.list.links a.title::after { content: ""; position: absolute; inset: 0; }
+.list.links > li:hover { background: var(--tint); }
+.list.links > li:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+.list.links > li:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+.list.links > li:only-child { border-radius: var(--radius); }
+
+/* --- Tables with a ⋯ menu in their rows: not in a sideways-scrolling box, which would cut the menu
+       off; instead they are made to fit an iPad held upright (tighter cells, long words wrap) ------- */
+.table-box { background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.table-box th, .table-box td { padding: var(--s3) var(--s2); }
+.table-box :is(th, td):first-child { padding-left: var(--s4); }
+.table-box :is(th, td):last-child { padding-right: var(--s3); }
+.table-box td.wrap { min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.table-box td.wrap:first-child { min-width: calc(2 * var(--s8)); }
+.table-box a.title { color: var(--text); font-weight: var(--bold); text-decoration: none; }
+.table-box a.title:hover { color: var(--accent); text-decoration: underline; }
+.table-box td.num .waiting { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s1); }
+.fact.gpu { color: var(--gpu); }
+td.more, td.end { width: 1%; text-align: right; }
+.cell-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--s2); }
+.cell-actions :is(button, a.button):not(.icon) { padding: var(--s1) var(--s3); font-size: var(--t-sm); }
+/* A person in a table: the name, and the username under it */
+.person { display: grid; }
+.person .muted { font-size: var(--t-xs); }
+/* A title in a table with what it stands at beside it, and a line of facts under it */
+.table-box .title-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.table-box td .meta { margin-top: var(--s1); gap: 0 var(--s3); }
+/* Teach > Assignments on an iPad: who it is for and when it is due go into that line, rather than
+   into columns of their own, so that the titles have room */
+.table-box .meta .narrow { display: none; }
+@media (max-width: 1099px) {
+  .table-box :is(th, td).wide { display: none; }
+  .table-box .meta .narrow { display: contents; }
+}
+
+/* --- Teach > Overview -------------------------------------------------------------------------- */
+.overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s7) var(--s6); }
+.overview > section + section { margin-top: 0; }
+@media (max-width: 1023px) {
+  .overview { grid-template-columns: minmax(0, 1fr); }      /* an iPad held upright: one column */
+}
+.course-card { display: grid; gap: var(--s3); align-content: start; }
+.grid .course-card h3 { margin: 0; }
+.course-card .chip { justify-self: start; }
+
+/* --- An assignment's gradebook ------------------------------------------------------------------ */
+.gradebook-facts { margin-bottom: var(--s3); }
+/* The gradebook's table fits an iPad held upright: tighter cells, dates on two lines if need be,
+   and the buttons of a row one under the other when there is no room for them side by side */
+.gradebook :is(th, td) { padding: var(--s3) var(--s2); }
+.gradebook :is(th, td):first-child { padding-left: var(--s4); }
+.gradebook :is(th, td):last-child { padding-right: var(--s3); }
+.gradebook td.when { white-space: normal; }
+.gradebook .cell-actions { flex-wrap: wrap; }
+.gradebook td.end { width: auto; }
+/* What "Open" does with a student's notebook: a note to read once, not a warning */
+.safety { display: flex; align-items: flex-start; gap: var(--s2); max-width: var(--w-text); margin: 0 0 var(--s4); color: var(--muted); font-size: var(--t-sm); }
+.safety svg.lucide { flex: none; margin-top: var(--s1); color: var(--info); }
+/* The score and what it is out of, on one line */
+.score-field { display: flex; align-items: center; gap: var(--s2); font-weight: 400; }
+.grade .score-field input { width: calc(2 * var(--s8)); }      /* narrower than other fields in a table cell */
+/* The grading panel stays in view when the table scrolls sideways: as wide as the page's content, at most a line of reading */
+
+/* --- A section that deletes something ----------------------------------------------------------- */
+.danger-zone { max-width: var(--w-text); padding: var(--s5); background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--error); border-radius: var(--radius); }
+.danger-zone h2 { margin: 0 0 var(--s2); }
+.danger-zone p { margin: 0 0 var(--s4); }
+
+/* --- Forms --------------------------------------------------------------------------------------- */
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(256px, 1fr)); align-items: end; gap: var(--s4); max-width: var(--w-page); }
+.form label.check { display: flex; align-items: center; gap: var(--s2); font-weight: 400; }
+.form label.check select { margin-left: var(--s1); padding: var(--s1) var(--s2); }
+.form .full { grid-column: 1 / -1; margin: 0; }
+.form textarea { resize: vertical; }
+.form select { max-width: 100%; }
+.form fieldset { display: grid; gap: var(--s3); margin: 0; padding: var(--s3) var(--s4) var(--s4); border: 1px solid var(--border); border-radius: var(--radius); }
+.form legend { padding: 0 var(--s2); font-size: var(--t-sm); font-weight: var(--bold); }
+.grade .form { max-width: none; }
+.dialog-body .password code { font-size: var(--t-xl); user-select: all; overflow-wrap: anywhere; }
+.account .card { height: auto; }
+.account .card h2 { margin-bottom: var(--s4); }
+
+/* Choosing students: a search and Select all / none above a list of tick boxes that scrolls */
+.picker { display: grid; gap: var(--s3); }
+.picker-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.picker-bar .muted { font-size: var(--t-sm); }
+.picker-bar :is(button, a.button):not(.icon) { padding: var(--s1) var(--s3); font-size: var(--t-sm); }
+.picker label.search { position: relative; display: inline-flex; flex: 1; align-items: center; min-width: var(--w-menu); max-width: 384px; }
+.picker .search svg.lucide { position: absolute; left: var(--s3); color: var(--muted); pointer-events: none; }
+.picker .search input { width: 100%; padding-left: var(--s6); }
+.students { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--w-rail), 1fr)); gap: var(--s1) var(--s4); max-height: calc(5 * var(--s8)); margin: 0; padding: var(--s3); overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+.students label.check { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) 0; font-size: var(--t-base); font-weight: 400; }
+@media (pointer: coarse) {
+  .students label.check { padding: var(--s2) 0; }          /* a finger needs taller rows */
+}
+form.members { display: grid; gap: var(--s4); height: auto; max-width: var(--w-page); }
+form.members > p { margin: 0; }
+
+iframe.hub-admin { width: 100%; height: 640px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* --- Lessons: writing them (Teach > Lessons > a lesson) ----------------------------------------- */
+.editor { display: grid; gap: var(--s3); max-width: var(--w-text); }
+.editor > p { margin: 0; }
+.block select { padding: var(--s1) var(--s2); }
+.editor :is(h1, h2, h3), .editor [data-focus] { scroll-margin-top: var(--s8); }     /* a heading or block brought into view (from the list of topics) gets some room above it */
+/* The title and the summary are typed in place, in the page's header, and look like a title and the
+   line under it. A thin line under each shows they can be changed: an iPad has no hover to reveal it. */
+.page-header h1:has(> input.lesson-title) { flex: 1 1 var(--w-rail); min-width: 0; }
+input.lesson-title, input.lesson-summary { width: 100%; padding: var(--s1) 0; background: transparent; border-color: transparent; border-bottom-color: var(--border); border-radius: 0; }
+input.lesson-title { font-size: inherit; font-weight: var(--bold); letter-spacing: inherit; line-height: 1.25; }
+input.lesson-summary { color: var(--muted); }
+input.lesson-title:hover, input.lesson-summary:hover { border-bottom-color: var(--border-strong); }
+/* The line of facts under them: who it is for (a choice), whether it is saved, what students see */
+.writing .page-header .meta select { max-width: var(--w-menu); margin-left: var(--s1); padding: var(--s1) var(--s2); color: var(--text); font-size: var(--t-sm); }
+.block { display: grid; gap: var(--s2); padding: var(--s2) var(--s4) var(--s4); background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.block:focus-within { border-color: var(--border-strong); box-shadow: var(--shadow-2); }      /* the block being worked on comes forward; the blue ring is for the field the cursor is in */
+.block > p { margin: 0; }
+.block > *, .text-editor > textarea { min-width: 0; }
+.block-bar { display: flex; align-items: center; gap: var(--s1); }
+.block-bar .check-label { margin: 0; }
+.block textarea, .block input:not([type="checkbox"]):not([type="file"]) { width: 100%; }
+.block textarea { display: block; overflow: hidden; resize: none; }
+.block textarea.question { font-weight: var(--bold); }
+.block select { justify-self: start; max-width: 100%; }
+.block input.language { width: var(--w-menu); padding: var(--s1) var(--s2); font-size: var(--t-sm); }
+textarea.mono { overflow-x: auto; white-space: pre; }
+.rendered { min-height: var(--s7); padding: var(--s3); border-radius: var(--radius); cursor: text; }
+.rendered:hover { background: var(--tint); }
+.text-editor { position: relative; }
+.slash-menu { position: absolute; z-index: 3; top: 100%; left: 0; min-width: var(--w-rail); margin: var(--s1) 0 0; padding: var(--s1); list-style: none; background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-3); }
+.slash-menu li { padding: var(--s2) var(--s3); border-radius: var(--radius-small); cursor: pointer; }
+.slash-menu li.picked, .slash-menu li:hover { background: var(--tint); }
+.option-list { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.option-list li { display: flex; align-items: center; gap: var(--s2); }
+.option-list input[type="checkbox"] { order: -1; width: var(--s5); height: var(--s5); accent-color: var(--gpu); }
+/* Between two blocks: a "+" that opens the list of blocks to add there. Always in view: an iPad has no hover to reveal it. */
+.add-here { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s2); margin: calc(-1 * var(--s1)) 0; }
+.add-here > button.icon { height: var(--s5); }
+@media (pointer: coarse) {
+  .add-here > button.icon { height: var(--s6); }
+}
+.add-block { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding-top: var(--s2); }
+.add-block button, .add-here button.secondary { font-size: var(--t-sm); }
+details.import { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--border); }
+details.import summary { font-weight: var(--bold); }
+details.import textarea { display: block; width: 100%; resize: vertical; }
+
+/* The editor's three parts: the page's header, the list of lessons, and the lesson being written. The
+   header and the lesson are as wide as a line of the lesson at most, and centred. */
+.writing { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "header" "rail" "editor"; align-items: start; gap: var(--s5); }
+.writing > .page-header { grid-area: header; margin-bottom: 0; }
+.writing > .rail { grid-area: rail; }
+.writing > .editor { grid-area: editor; }
+.writing > :is(.page-header, .rail, .editor) { justify-self: center; width: 100%; max-width: var(--w-text); }
+@media (max-width: 1359px) {
+  /* An iPad, or a small window: the list sits between the header and the lesson, in a box of its own
+     that scrolls, as wide as the lesson so that their edges line up. */
+  .writing > .rail { position: static; max-height: 256px; padding: var(--s3); background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+}
+@media (min-width: 1360px) {
+  /* Room for the list beside the lesson: it stays in view on the left, from the top of the page, and
+     the header and the lesson are centred in the space next to it. */
+  .writing { grid-template-columns: var(--w-rail) minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "rail header" "rail editor"; gap: var(--s6); }
+  .writing > .rail { max-width: none; }
+}
+
+/* --- A file to upload: a place to drop it, or to tap and choose it (components/teach/FileDrop.tsx) - */
+label.file-drop { position: relative; display: flex; align-items: center; gap: var(--s3); padding: var(--s5); background: var(--card); color: var(--text); border: 2px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--t-base); font-weight: 400; cursor: pointer; }
+label.file-drop:hover { background: var(--tint); }
+label.file-drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }      /* the field itself is out of sight */
+label.file-drop.over { background: var(--accent-tint); border-color: var(--accent); }      /* a file is being dragged over it */
+label.file-drop:has(input:disabled) { color: var(--muted); cursor: progress; }
+.file-drop-words { display: grid; gap: var(--s1); min-width: 0; }
+.file-drop-words strong { overflow-wrap: anywhere; }
+.file-drop-words :is(.muted, .error) { font-size: var(--t-sm); }
+
+/* A save of the lesson that failed, in a corner of the screen while writing (the header may be out of view) */
+.save-failed { position: fixed; z-index: 4; right: var(--s5); bottom: var(--s5); display: flex; align-items: center; gap: var(--s2); margin: 0; padding: var(--s3) var(--s4); background: var(--card); color: var(--error); border: 1px solid var(--edge); border-left: 4px solid var(--error); border-radius: var(--radius); box-shadow: var(--shadow-3); font-size: var(--t-sm); }
+.save-failed .text-button { margin-left: var(--s2); font-weight: var(--bold); }

@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.jupyter.deps import PlatformUser
-from app.models import Assignment, AssignmentOpen, AssignmentStudent, CourseStudent, User
+from app.models import Assignment, AssignmentOpen, AssignmentStudent, CourseStudent, Submission, User
 
 MAX_NOTEBOOK_BYTES = 10 * 1024 * 1024      # room for plots and images in the outputs
 MAX_SUBMISSION_BYTES = 2 * MAX_NOTEBOOK_BYTES   # a student's copy grows as they run it
@@ -105,6 +105,44 @@ def opens_of(db: Session, assignment_id: int) -> dict[int, datetime]:
     """user id -> when they first opened this assignment."""
     rows = db.execute(select(AssignmentOpen.user_id, AssignmentOpen.opened_at).where(AssignmentOpen.assignment_id == assignment_id))
     return {row.user_id: row.opened_at for row in rows}
+
+
+def counts(db: Session) -> dict[int, dict]:
+    """assignment id -> how far its students have got: how many it is given to, opened it and
+    submitted, and how many submissions wait for a teacher (graded by hand, or the autograder could
+    not run them). Only the students it is given to count, as in its gradebook: a teacher trying it
+    out, or a student who has since left the course, does not. A few queries for every assignment
+    at once, not a few per assignment."""
+    everyone = set(db.scalars(select(User.id).where(User.role == "student")))
+    by_name: dict[int, set[int]] = {}
+    for row in db.execute(select(AssignmentStudent.assignment_id, AssignmentStudent.user_id)):
+        by_name.setdefault(row.assignment_id, set()).add(row.user_id)
+    in_course: dict[int, set[int]] = {}
+    for row in db.execute(select(CourseStudent.course_id, CourseStudent.user_id)):
+        in_course.setdefault(row.course_id, set()).add(row.user_id)
+    opened: dict[int, set[int]] = {}
+    for row in db.execute(select(AssignmentOpen.assignment_id, AssignmentOpen.user_id)):
+        opened.setdefault(row.assignment_id, set()).add(row.user_id)
+    handed_in: dict[int, list] = {}
+    for row in db.execute(select(Submission.assignment_id, Submission.user_id, Submission.status, Submission.late, Submission.submitted_at)):
+        handed_in.setdefault(row.assignment_id, []).append(row)
+
+    found = {}
+    for assignment in db.execute(select(Assignment.id, Assignment.for_everyone, Assignment.course_id)):
+        given = everyone if assignment.for_everyone else (by_name.get(assignment.id, set()) | in_course.get(assignment.course_id, set())) & everyone
+        rows = [row for row in handed_in.get(assignment.id, []) if row.user_id in given]
+        waiting = [row for row in rows if row.status in ("submitted", "failed")]
+        found[assignment.id] = {
+            "given": len(given),
+            "opened": len(opened.get(assignment.id, set()) & given),
+            "submitted": len(rows),
+            "graded": sum(row.status == "graded" for row in rows),
+            "to_grade": sum(row.status == "submitted" for row in rows),      # waiting for a grade by hand
+            "failed": sum(row.status == "failed" for row in rows),           # the autograder could not run them
+            "late": sum(row.late for row in rows),
+            "oldest_waiting_at": min(row.submitted_at for row in waiting).isoformat() if waiting else None,
+        }
+    return found
 
 
 # --- checks on what a teacher sends ---------------------------------------------------------------

@@ -12,12 +12,17 @@ export type SubmissionSummary = {
 // Teachers also get `output` (it describes the hidden tests) and `error` (the autograder's log).
 export type Question = { name: string; score: number; max_score: number; output?: string };
 
+// Whether a question's public tests passed. Students get no text from Otter: the student's code runs
+// with the tests, so that text could carry what it read from the hidden ones (api/app/grading.py).
+export type PublicTest = { name: string; passed: boolean };
+
 export type Submission = SubmissionSummary & {
   feedback: string;           // the teacher's comment
   graded_at: string | null;
   graded_by_teacher: boolean;
   questions: Question[];
-  public_output: string;      // what the public tests reported
+  public_tests: PublicTest[];
+  public_output?: string;     // teachers only: what the public tests reported
   error: string | null;
 };
 
@@ -38,13 +43,26 @@ export type Assignment = {
 export type MyAssignment = Assignment & { opened_at: string | null; submission: SubmissionSummary | null };
 export type MyAssignmentDetail = Assignment & { opened_at: string | null; submission: Submission | null };
 
-// What Settings > Assignments works with (teachers and admins only, see api/app/teach.py).
+// What Teach > Assignments works with (teachers and admins only, see api/app/teach.py).
+// How far an assignment's students have got. Only the students it is given to count, as in its gradebook.
+export type AssignmentCounts = {
+  given: number;
+  opened: number;
+  submitted: number;
+  graded: number;
+  to_grade: number;           // waiting for the teacher to grade them by hand
+  failed: number;             // the autograder could not run them: the teacher looks at why
+  late: number;
+  oldest_waiting_at: string | null;
+};
+
 export type ManagedAssignment = Assignment & {
   slug: string;               // the folder name in each student's notebooks: assignments/<slug>/
   notebook_name: string;
   for_everyone: boolean;      // every student, including accounts created later
   student_ids: number[];      // the students it is given to by name
   created_at: string;
+  counts?: AssignmentCounts;  // in the list of assignments (GET /teach/assignments) only
 };
 
 // One row of an assignment's gradebook.
@@ -73,6 +91,7 @@ export type Me = {
   is_admin: boolean;
   can_teach: boolean;         // teacher or admin. Only decides which links are shown: the server checks every request.
   gpu_enabled: boolean;
+  theme: string;              // how the site looks for this account (lib/themes.ts)
 };
 
 export type Account = {

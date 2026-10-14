@@ -47,6 +47,7 @@ def test_login_me_logout(client, db):
     assert "httponly" in r.headers["set-cookie"].lower() and "samesite=lax" in r.headers["set-cookie"].lower()
     assert client.get("/api/me").json() == {
         "id": user.id, "username": "maria", "name": "Maria Lopez", "role": "student", "is_admin": False, "can_teach": False, "gpu_enabled": False,
+        "theme": "standard",
     }
 
     cookie = client.cookies[auth.COOKIE_NAME]

@@ -37,16 +37,18 @@ def summary(submission: Submission) -> dict:
 
 
 def details(submission: Submission, for_teacher: bool) -> dict:
+    """A submission and its grade. Students get no text from Otter (app/grading.py says why):
+    their score per question and whether each question's public tests passed."""
     return {
         **summary(submission),
         "feedback": submission.feedback,
         "graded_at": _iso(submission.graded_at),
         "graded_by_teacher": submission.graded_by is not None,
         "questions": grading.questions(submission.results, with_hidden_output=for_teacher),
-        "public_output": grading.public_output(submission.results),
+        "public_tests": grading.public_tests(submission.results),
         # Why the autograder could not run it. For the student: only that it failed.
         "error": submission.error if for_teacher else None,
-    }
+    } | ({"public_output": grading.public_output(submission.results)} if for_teacher else {})
 
 
 def of_user(db: Session, user_id: int) -> dict[int, Submission]:

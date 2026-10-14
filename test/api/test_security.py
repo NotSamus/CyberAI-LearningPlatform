@@ -363,3 +363,18 @@ def test_an_account_is_not_removed_while_the_hub_is_unreachable(client, db, monk
     r = client.delete("/api/admin/users/2")
     assert r.status_code == 503 and "was not removed" in r.json()["detail"]
     assert login(TestClient(app), "maria").status_code == 200
+
+
+# --- secrets --------------------------------------------------------------------------------------
+
+def test_the_backend_refuses_placeholder_secrets_once_others_can_reach_it():
+    long_one = "0123456789abcdef" * 4                            # like `openssl rand -hex 32`
+    placeholders = {"HUB_API_TOKEN": "dev-hub-api-token", "OAUTH_CLIENT_SECRET": "change-me", "GRADER_TOKEN": ""}
+    # On this computer only, the defaults in the repository are fine.
+    for origin in ("http://localhost:3000", "http://127.0.0.1:3001"):
+        assert config.weak_secrets(origin, placeholders) == []
+    # Anywhere else (a server, or ./dev.sh --lan): each secret must be long and not a placeholder.
+    for origin in ("https://cyberai.utep.edu", "http://192.168.1.20:3000", "http://localhost.evil.example"):
+        assert config.weak_secrets(origin, placeholders) == ["HUB_API_TOKEN", "OAUTH_CLIENT_SECRET", "GRADER_TOKEN"]
+    assert config.weak_secrets("https://cyberai.utep.edu", {"A": long_one, "B": "x" * 31, "C": f"dev-{long_one}"}) == ["B", "C"]
+    assert config.weak_secrets("http://192.168.1.20:3000", {"HUB_API_TOKEN": long_one}) == []    # what dev.sh --lan makes

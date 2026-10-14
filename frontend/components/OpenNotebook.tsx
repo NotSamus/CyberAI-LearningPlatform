@@ -1,15 +1,20 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Award, Bot, Cpu, ExternalLink, NotebookPen, RotateCcw, Send, UserCheck, Users } from "lucide-react";
 import DueDate from "@/components/DueDate";
-import Status from "@/components/Status";
+import PageHeader from "@/components/PageHeader";
+import Status, { Label, points, publishLabel } from "@/components/Status";
 import SubmissionResult from "@/components/SubmissionResult";
+import { courseName } from "@/components/learn/courses";
 import { api, type Launch, type MyAssignmentDetail, type Submission } from "@/lib/api";
 import { message } from "@/lib/errors";
+import { useMe } from "@/lib/useMe";
 
 type Phase = "idle" | "starting" | "open" | "error";
 
 export default function OpenNotebook({ assignmentId }: { assignmentId: string }) {
+  const me = useMe();
   const [assignment, setAssignment] = useState<MyAssignmentDetail | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [launch, setLaunch] = useState<Launch | null>(null);
@@ -77,21 +82,24 @@ export default function OpenNotebook({ assignmentId }: { assignmentId: string })
 
   const submission = assignment?.submission ?? null;
   const canSubmit = assignment?.published && assignment.opened_at;
-  const submitButton = canSubmit && (
-    <button onClick={submit} disabled={submitting}>
-      {submitting ? "Submitting…" : submission ? "Submit again" : "Submit"}
+  // Filled in the notebook's bar, where it is the main thing to do; outlined on the page before,
+  // where opening the notebook is.
+  const submitButton = (main: boolean) => canSubmit && (
+    <button className={main ? "" : "secondary"} onClick={submit} disabled={submitting}>
+      <Send aria-hidden />{submitting ? "Submitting…" : submission ? "Submit again" : "Submit"}
     </button>
+  );
+  const environment = (gpu: boolean) => (
+    <span className="fact"><Cpu aria-hidden />{gpu ? "GPU environment" : "Standard environment"}</span>
   );
 
   if (phase === "open" && launch && assignment) {
     return (
       <div className="workspace">
         <div className="workspace-bar">
-          <Link href="/">← Home</Link>
+          <Link href="/" className="back"><ArrowLeft aria-hidden />Home</Link>
           <strong>{assignment.title}</strong>
-          <span className={`badge ${launch.profile === "gpu" ? "gpu" : ""}`}>
-            {launch.profile === "gpu" ? "GPU environment" : "Standard environment"}
-          </span>
+          {environment(launch.profile === "gpu")}
           <DueDate due_at={assignment.due_at} done={Boolean(submission)} />
           <span className="spacer" />
           {submission && (
@@ -99,9 +107,9 @@ export default function OpenNotebook({ assignmentId }: { assignmentId: string })
               <Status assignment={assignment} /> {showResult ? "Hide" : "Details"}
             </button>
           )}
-          {submitButton}
-          <button className="secondary" onClick={restart}>Restart environment</button>
-          <a href={launch.url} target="_blank" rel="noopener">Open in a new tab</a>
+          {submitButton(true)}
+          <button className="secondary" onClick={restart}><RotateCcw aria-hidden />Restart environment</button>
+          <a href={launch.url} target="_blank" rel="noopener" className="button secondary"><ExternalLink aria-hidden />Open in a new tab</a>
         </div>
         {error && <p className="error bar-message" role="alert">{error}</p>}
         {showResult && submission && <div className="bar-message"><SubmissionResult submission={submission} /></div>}
@@ -111,37 +119,79 @@ export default function OpenNotebook({ assignmentId }: { assignmentId: string })
     );
   }
 
+  if (!assignment) {
+    return (
+      <main className="page assignment">
+        <p className="crumbs"><Link href="/">Home</Link></p>
+        {error ? <p className="error" role="alert">{error}</p> : <p className="muted">Loading…</p>}
+      </main>
+    );
+  }
+
+  const teacher = Boolean(me?.can_teach);
   return (
-    <main className="page">
-      <p><Link href="/">← Home</Link></p>
-      <h1>{assignment?.title ?? "Assignment"}</h1>
-      {assignment && (
-        <p className="badges">
-          {!assignment.published && <span className="badge draft">Draft: students cannot see this yet</span>}
-          {assignment.course && <span className="badge">{assignment.course}</span>}
-          <span className={`badge ${assignment.requires_gpu ? "gpu" : ""}`}>
-            {assignment.requires_gpu ? "GPU environment" : "Standard environment"}
+    <main className="page assignment">
+      <PageHeader
+        crumbs={[{ label: "Home", href: "/" }, { label: courseName(assignment.course) }]}
+        title={assignment.title}
+        status={
+          <span className="badges">
+            {!assignment.published && <Label standing={publishLabel(assignment)} />}
+            {/* A teacher's own progress on an assignment means nothing: students get the status. */}
+            {me && !teacher && <Status assignment={assignment} />}
           </span>
-          <DueDate due_at={assignment.due_at} done={Boolean(submission)} />
-          {assignment.points !== null && <span className="badge">{assignment.points} points</span>}
-        </p>
-      )}
-      {assignment?.description && <p className="description">{assignment.description}</p>}
-      {assignment && (
-        <p className="muted">
-          You get your own copy of the notebook the first time you open it. Your work is saved in it
-          and is there next time. When you are done, save the notebook and press Submit.
-          {assignment.autograded && " It is graded automatically within a minute or so, and you can submit again to improve your score."}
-        </p>
-      )}
-      {assignment && (
-        <p className="row">
+        }
+        description={assignment.description || undefined}
+        actions={teacher && (
+          <Link href={`/teach/assignments/${assignment.id}`} className="button secondary"><Users aria-hidden />Progress and grades</Link>
+        )}
+      />
+      <p className="meta">
+        <DueDate due_at={assignment.due_at} done={Boolean(submission)} />
+        {environment(assignment.requires_gpu)}
+        {assignment.points !== null && <span className="fact"><Award aria-hidden />{points(assignment.points)} points</span>}
+        {assignment.autograded
+          ? <span className="fact"><Bot aria-hidden />Graded automatically</span>
+          : <span className="fact"><UserCheck aria-hidden />Graded by your teacher</span>}
+      </p>
+
+      <section className="card start" aria-label="How it works">
+        <ol className="steps">
+          <li>
+            <span className="number" aria-hidden>1</span>
+            <div>
+              <strong>Open the notebook</strong>
+              <span className="muted">You get your own copy the first time you open it. Your work is saved in it and is there next time.</span>
+            </div>
+          </li>
+          <li>
+            <span className="number" aria-hidden>2</span>
+            <div>
+              <strong>Work in it, and save</strong>
+              <span className="muted">Press Ctrl+S, or File &gt; Save Notebook: only what is saved is handed in.</span>
+            </div>
+          </li>
+          <li>
+            <span className="number" aria-hidden>3</span>
+            <div>
+              <strong>Submit</strong>
+              <span className="muted">
+                {assignment.autograded
+                  ? "It is graded automatically within a minute or so, and you can submit again to improve your score."
+                  : "Your teacher grades it. You can submit again, but that replaces your earlier submission and its grade."}
+              </span>
+            </div>
+          </li>
+        </ol>
+        <div className="start-actions">
           <button onClick={open} disabled={phase === "starting"}>
-            {phase === "starting" ? "Starting your environment (up to a minute)…" : "Open Notebook"}
+            <NotebookPen aria-hidden />
+            {phase === "starting" ? "Starting your environment (up to a minute)…" : assignment.opened_at ? "Continue working" : "Open the notebook"}
           </button>
-          {submitButton}
-        </p>
-      )}
+          {submitButton(false)}
+        </div>
+      </section>
+
       {error && <p className="error" role="alert">{error}</p>}
       {submission && <SubmissionResult submission={submission} />}
     </main>

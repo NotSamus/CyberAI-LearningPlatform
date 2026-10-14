@@ -7,9 +7,16 @@ solutions, only the public tests) and an autograder package (every test). When a
 
 Nothing is executed in this process, which can reach the database. The work is done by the grading
 service (grader/ at the project root), in a throwaway container without network access.
+
+Otter runs the student's code and the tests in one process, so the results that come back are only
+as trustworthy as that code: it can read the hidden tests there and change what Otter reports. So
+the results are checked rather than believed (a question scores between 0 and its maximum), and a
+student is never sent Otter's text about a test, which could carry anything their code printed or
+returned: only each question's score and whether its public tests passed. Teachers get everything.
 """
 import base64
 import json
+import math
 
 import httpx
 
@@ -94,31 +101,77 @@ async def prepare(master: bytes, name: str, gpu: bool) -> tuple[bytes, bytes]:
 
 async def grade(notebook: bytes, autograder: bytes, name: str, gpu: bool) -> dict:
     """Otter's results for a submitted notebook: {"tests": [{name, score, max_score, visibility, output}, ...]}."""
-    return (await _ask_grader("/grade", name, gpu, {"notebook": notebook, "autograder": autograder}))["results"]
+    results = (await _ask_grader("/grade", name, gpu, {"notebook": notebook, "autograder": autograder}))["results"]
+    if not isinstance(results, dict) or not isinstance(results.get("tests", []), list):
+        raise GradingError("Otter's results could not be read.", str(results)[:2000])
+    return results
+
+
+def _number(value) -> float | None:
+    """`value` if it is a real, finite number (not True, not NaN), else None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return float(value)
 
 
 def _scored(results: dict) -> list[dict]:
-    return [t for t in results.get("tests", []) if isinstance(t.get("max_score"), (int, float))]
+    """The questions: Otter's entries that have points."""
+    return [
+        t for t in results.get("tests", [])
+        if isinstance(t, dict) and (most := _number(t.get("max_score"))) is not None and most >= 0
+    ]
+
+
+def _score(question: dict) -> float:
+    """A question's score, kept between 0 and the question's maximum, whatever the results say."""
+    return min(max(_number(question.get("score")) or 0.0, 0.0), _number(question["max_score"]))
 
 
 def totals(results: dict) -> tuple[float, float]:
     """(score, the most it could have been)."""
     scored = _scored(results)
-    return float(sum(t.get("score") or 0 for t in scored)), float(sum(t["max_score"] for t in scored))
+    return float(sum(_score(t) for t in scored)), float(sum(_number(t["max_score"]) for t in scored))
 
 
 def questions(results: dict | None, with_hidden_output: bool) -> list[dict]:
     """A score per question. Otter's output for a question describes its hidden tests too, so only
     teachers get it."""
     return [
-        {"name": t.get("name", ""), "score": t.get("score") or 0, "max_score": t["max_score"]}
+        {"name": str(t.get("name", "")), "score": _score(t), "max_score": _number(t["max_score"])}
         | ({"output": t.get("output", "")} if with_hidden_output else {})
         for t in _scored(results or {})
     ]
 
 
 def public_output(results: dict | None) -> str:
-    """What Otter marks as visible to students: the outcome of the public tests."""
+    """Otter's report on the public tests, for teachers. Not for students: the student's code runs
+    with the tests, so this text can carry anything that code printed or returned, also what it read
+    from the hidden tests (they see the same report in their notebook with grader.check)."""
     return "\n\n".join(
-        t["output"] for t in (results or {}).get("tests", []) if t.get("visibility") == "visible" and t.get("output")
+        str(t["output"]) for t in (results or {}).get("tests", [])
+        if isinstance(t, dict) and t.get("visibility") == "visible" and t.get("output")
     )
+
+
+def public_tests(results: dict | None) -> list[dict]:
+    """For students: per question, whether its public tests passed. Names and yes or no only.
+
+    Read from Otter's "Public Tests" summary, which has one line per question at the start of a
+    line: "q1 results: All test cases passed!" or "q1 results:" with the failures indented below it
+    (where anything the student's code printed ends up). Only the names of questions are looked for."""
+    summary = next(
+        (t for t in (results or {}).get("tests", []) if isinstance(t, dict) and t.get("name") == "Public Tests" and t.get("visibility") == "visible"),
+        None,
+    )
+    if summary is None:
+        return []
+    passed_all = summary.get("status") == "passed"
+    lines = set(str(summary.get("output") or "").splitlines())
+    found = []
+    for question in questions(results, with_hidden_output=False):
+        name = question["name"]
+        if passed_all or f"{name} results: All test cases passed!" in lines:
+            found.append({"name": name, "passed": True})
+        elif f"{name} results:" in lines:
+            found.append({"name": name, "passed": False})
+    return found

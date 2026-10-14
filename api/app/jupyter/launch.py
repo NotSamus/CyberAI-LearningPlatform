@@ -48,6 +48,7 @@ async def me(user: PlatformUser = Depends(require_user)):
         "is_admin": user.is_admin,
         "can_teach": user.can_teach,
         "gpu_enabled": "gpu" in user.hub_groups,
+        "theme": user.theme,
     }
 
 

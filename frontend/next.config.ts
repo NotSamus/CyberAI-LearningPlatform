@@ -33,6 +33,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Teaching and accounts used to live under /settings. Old links and bookmarks are sent on to
+  // where each page is now, with their query string. Temporary (307), so the old paths stay free.
+  // "/:path*" also matches nothing, so each rule covers its list page too. /settings itself is a
+  // page (app/settings/page.tsx): where it sends you depends on who you are.
+  async redirects() {
+    const moved = (from: string, to: string) => ({ source: from, destination: to, permanent: false });
+    return [
+      moved("/settings/lessons/:path*", "/teach/lessons/:path*"),
+      moved("/settings/assignments/:path*", "/teach/assignments/:path*"),
+      moved("/settings/courses/:path*", "/teach/courses/:path*"),
+      moved("/settings/announcements/:path*", "/teach/announcements/:path*"),
+      moved("/settings/accounts", "/admin/accounts"),
+      moved("/settings/hub", "/admin/hub"),
+      moved("/settings/account", "/account"),
+    ];
+  },
   // Local development: forward API + OAuth routes to uvicorn. In production Caddy routes
   // these paths to the backend before they ever reach Next.js.
   async rewrites() {

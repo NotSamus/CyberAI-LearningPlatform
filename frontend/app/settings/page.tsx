@@ -1,15 +1,16 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { sectionsFor } from "@/lib/sections";
 import { useMe } from "@/lib/useMe";
 
-// /settings itself has nothing to show: go to the first section this account has.
+// Teaching and accounts used to be under /settings. The old pages below it are sent on by the
+// redirects in next.config.ts; /settings itself sends teachers to Teach and everyone else to their
+// own account.
 export default function SettingsIndex() {
   const me = useMe();
   const router = useRouter();
   useEffect(() => {
-    if (me) router.replace(sectionsFor(me)[0]?.href ?? "/");
+    if (me) router.replace(me.can_teach ? "/teach" : "/account");
   }, [me, router]);
-  return <p className="muted">Loading…</p>;
+  return <main className="page"><p className="muted">Loading…</p></main>;
 }

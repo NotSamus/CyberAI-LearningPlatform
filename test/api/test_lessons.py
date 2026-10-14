@@ -430,7 +430,17 @@ def test_pictures(people, db):
     r = maria.get("/api/lessons/1/images/1")
     assert r.status_code == 200 and r.content == PNG
     assert (r.headers["content-type"], r.headers["x-content-type-options"]) == ("image/png", "nosniff")
-    assert maria.get("/api/lessons/1/images/2").headers["content-type"] == "image/jpeg"
+    # Picture 2 was uploaded but is in no block: the teacher can see it, students cannot.
+    assert teacher.get("/api/lessons/1/images/2").headers["content-type"] == "image/jpeg"
+    assert maria.get("/api/lessons/1/images/2").status_code == 404
+    # Nor before the block it is in is published: until then it is in the teacher's working copy only.
+    teacher.patch("/api/teach/lessons/1", json={"blocks": [
+        text(), {"type": "image", "id": "image1", "image_id": 1, "alt": "A TLS handshake"},
+        {"type": "image", "id": "image2", "image_id": 2, "alt": "Photo"},
+    ]})
+    assert maria.get("/api/lessons/1/images/2").status_code == 404 and teacher.get("/api/lessons/1/images/2").status_code == 200
+    teacher.post("/api/teach/lessons/1/publish")
+    assert maria.get("/api/lessons/1/images/2").status_code == 200
     # Only for the people who may see the lesson, and only that lesson's pictures.
     assert jose.get("/api/lessons/1/images/1").status_code == 404
     assert TestClient(app).get("/api/lessons/1/images/1").status_code == 401

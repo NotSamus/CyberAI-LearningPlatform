@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from app import auth
 from app.main import app
 from app.models import Announcement, Course
-from conftest import PASSWORD, browser, upload
+from conftest import PASSWORD, upload
 
 
 def titles(client) -> list[str]:

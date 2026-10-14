@@ -23,6 +23,12 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   the gradebook. Students are never sent the answers before a question is closed. (2026-10-13)
 - Videos in lessons come from YouTube only (cookie-less player); pictures are uploaded, never linked
   from other sites. (2026-10-13)
+- No phone version of the site: it is made for iPad and desktop. (2026-10-13)
+- Teaching tools move out of Settings into their own area again: the top bar becomes Home · Teach
+  (teachers and admins) · Admin (admins), and My account moves to a menu under your name. Old
+  /settings links redirect. This replaces the 2026-10-02 decision to keep teaching inside Settings. (2026-10-13)
+- Brand: a navy top bar and login band with a cyan accent. Not UTEP's orange, and the UTEP name is
+  not written in the site. (2026-10-13)
 
 ## How accounts, Settings and the JupyterHub panel work (2026-10-02)
 
@@ -115,7 +121,10 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   Example to start from: `assignments/otter-example/functions.ipynb`. Run every test cell before
   uploading: the value a test cell shows is what Otter expects.
 - Any other notebook is graded by hand.
-- Students see their score per question and what the public tests reported, never the hidden tests.
+- Students see their score per question and whether each question's public tests passed (the details
+  are in their notebook, with grader.check). The platform never shows them the hidden tests or Otter's
+  report, but Otter runs their code next to the tests, so their code could read the hidden tests and
+  sway its own score: open the notebook when a score looks wrong.
 - A live run graded in about five seconds, and a hidden test caught a bug the public tests missed.
 - Gradebook: "Progress and grades" on each assignment. Per student: opened, submitted, score. I can
   open or download a submission, set a score, leave a comment, rerun the autograder, export CSV.
@@ -152,15 +161,15 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   when it starts, so changing the token in `deploy/.env` really replaces it.
 
 ### Trying it locally
-- Log in as `admin` at http://localhost:3001. Under Settings > Assignments there is a draft
+- Log in as `admin` at http://localhost:3001. Under Teach > Assignments there is a draft
   "Functions lab (autograded example)": publish it, open it, submit.
 
 ## Lessons (2026-10-13)
 
 ### Where things are
 - The project folder is now `~/Desktop/CyberAI-LearningPlatform` (a git repository, on GitHub).
-- Settings > Lessons: list, "Start writing", order arrows, "Who has done it". The editor is at
-  `/settings/lessons/<id>`, the page students read at `/lessons/<id>`.
+- Teach > Lessons: list, "New lesson", order arrows, a Progress tab per lesson. The editor is at
+  `/teach/lessons/<id>`, the page students read at `/lessons/<id>`.
 - Backend: `api/app/lessons.py` (rules), `api/app/lesson_routes.py` (routes), migration
   `sql/versions/2026_10_13_1301-96f8b8967047_lessons.py` (tables `lessons`, `lesson_images`,
   `lesson_progress`, `lesson_answers`). Frontend: `components/LessonEditor.tsx`, `LessonBlocks.tsx`,
@@ -173,10 +182,32 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - Paste or drop a picture anywhere. "Write or paste a whole lesson as text" turns text into blocks
   (`?? question`, `- [x]` correct, `- [ ]` wrong, `= accepted answer`, `> explanation`).
 
+### The list of lessons and the index of topics (2026-10-13)
+- Beside the editor: every lesson with its status, click to switch, "New lesson…" to start one.
+  `components/LessonRail.tsx`. It asks the server again when the window is come back to.
+- Headings written with `#`, `##`, `###` in text blocks are the lesson's topics. They show under the
+  current lesson in that list, and as "In this lesson" on the page students read
+  (`components/Outline.tsx`, `outline()` in `lib/lessons.ts`). No change on the server.
+- The page students read has the same kind of menu on its left: the lessons of that course with the
+  reader's progress, and the topics of the lesson being read (`components/LessonMenu.tsx`,
+  `LessonList.tsx`). It is there even when a lesson has no headings.
+- On an iPad the lists move above the editor (below 1360 px wide) and under the lesson's title (below 1100 px).
+
+### The look of the site (2026-10-13)
+- All styling is in `frontend/app/globals.css`, rewritten on scales after "Refactoring UI": spacing,
+  text sizes, two weights, one radius, three shadows, colours by role with a dark version. New values
+  are not invented: the nearest step is used.
+- Cards stand out by a shadow instead of an outline; fields have a darker outline (3:1); badges are
+  filled tints; deleting is a quiet red word; numbers in tables are right-aligned; lesson text is kept
+  to about 75 characters a line.
+- Fixed on the way: form tick boxes had picked up the knowledge check's card style (both used the
+  class `check`; the knowledge check is now `quiz`), and text typed into fields was bold.
+
 ### Limits right now
 - A lesson goes to all students or to one course, not to chosen students.
 - Two teachers editing the same lesson at once overwrite each other (last save wins).
-- No math formulas in Markdown and no colours in code blocks.
+- Headings written inside a quote or a list, or underlined with `===`, are not in the index.
+- No math formulas in Markdown. Code is coloured where it is read, not while it is typed in the editor.
 - Pictures taken out of a lesson are deleted from the database at the next Publish (after an hour).
 
 ### Not verified
@@ -185,7 +216,7 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 
 ### Still to do in the repository (2026-10-13)
 - `.gitignore` had `lib/` (from the Python template), which also ignored `frontend/lib/`: `api.ts`,
-  `dates.ts`, `errors.ts`, `sections.ts`, `useMe.ts` and `lessons.ts` were never on GitHub, so a fresh
+  `dates.ts`, `errors.ts`, `useMe.ts` and `lessons.ts` were never on GitHub, so a fresh
   clone could not build the frontend. `.gitignore` now has `!frontend/lib/`. Still to do: commit that
   folder and push.
 - `notes.md` got committed in this repository (it was ignored in the old folder). `.gitignore` ignores
@@ -197,3 +228,66 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 
 ### Running it locally
 - `conda activate CyberP` first: `dev.sh` needs `alembic` and `uvicorn`, which are not in the base environment.
+
+## The redesign: Teach and Admin areas, and the polish (2026-10-13)
+
+### Where things are now
+- Top bar: Home · Teach (teachers, admins) · Admin (admins), and a menu under my name with My account
+  and Log out. Teachers land on Teach > Overview after logging in.
+- Teach: Overview (to grade, due soon with counts, needs attention, courses) · Courses (each with
+  Content, Students and Announcements tabs) · Lessons (editor with Write | Progress tabs) · Assignments
+  (Upload notebook page; each assignment has Gradebook | Settings tabs) · Announcements.
+- Admin: Accounts · JupyterHub. My account: `/account`.
+- Old `/settings/...` links are sent on to the new pages (temporary redirects in `frontend/next.config.ts`).
+- The overview's counts come from the server: `counts` on each item of `GET /api/teach/assignments`
+  (`assignments.counts()` in `api/app/assignments.py`); only students the assignment is given to count.
+
+### How it looks
+- Navy bar with a cyan spark (only on the navy), the same navy band behind the login card.
+- Status chips with an icon and a word in five tones (green, blue, grey, yellow, red). Yellow is new:
+  due soon, changes not published, "try again". Red is only late, failed, wrong and deleting.
+- One page header everywhere; one filled button per page; rare or destructive actions in a ⋯ menu.
+- Icons: `lucide-react` 1.48.0 (exact version), sized by the CSS.
+- Styles in three files: `globals.css` (shared), `styles/teach.css`, `styles/learn.css`.
+- Student Home: Up next (the one thing to do now, then three more), Due soon, announcements, each
+  course with one progress bar. Lessons: header with "Lesson 2 of 3", reading time, checks progress,
+  dark code blocks with Copy, callouts with icons, knowledge checks as option cards with "Try 2 of 3",
+  and a completion panel without reloading.
+- Gradebook: "Save and next", the score says what it is out of. Dates leave out the year when it is this year.
+
+### Checked
+- In the dev browser at 768, 1024 and 1440 px wide, light and dark: every page of Home, a lesson,
+  an assignment, Teach, Admin, My account and login.
+- Tried: answering checks (wrong, out of tries, right), completing a lesson, grading with "Save and
+  next", posting an announcement, adding an account (the password box stays open through Escape),
+  uploading a notebook by dropping it, a failed lesson save (the corner notice and Try again), and the
+  old /settings links. The production build (`frontend/Dockerfile`) passes; 104 backend tests pass.
+
+### Not verified
+- Not on a real iPad. The 48 px touch size of icon buttons was not seen (the dev browser only acts as
+  a touch screen below 768 px).
+- Choosing a picture or notebook with the file picker in the new drop areas (dropping was tested).
+- A knowledge check with several right answers (check boxes) in its new look.
+- If `/api/me` fails with an error other than "not logged in", Home, Teach and Admin stay on
+  "Loading…" or blank, with no message.
+
+## Themes (2026-10-14)
+- My account > Appearance: Standard, Halloween, Retro 95. Saved per account on the server
+  (`users.theme`, migration `2026_10_14_0010-3b7e5c1d9a24_account_theme.py`, `PUT /api/auth/theme`),
+  mirrored in a `cyberai_theme` cookie so the first paint is right (`app/layout.tsx`).
+- Colours and the retro bevels are in `frontend/app/styles/themes.css`; the list in `frontend/lib/themes.ts`.
+- On the server: `git pull`, `docker compose up -d --build`, then run the migrations (new column).
+- Checked in the dev browser at 1024 px: account page, Home, a lesson, the editor, assignments,
+  gradebook, a menu, a dialog and login, in both themes.
+
+## Tests, lint and code colours (2026-10-14)
+- **Remember: the test suite must never get to the platform's database** (said 2026-10-14). The tests
+  run on their own Postgres (`deploy/docker-compose.test.yml`, port 5434, in memory); `test/conftest.py`
+  sets `DATABASE_URL` to it before the app is imported and stops if it is the platform's Postgres.
+- `./check.sh` (CyberP active, Docker running): ruff, the tests on that Postgres, tsc, ESLint.
+- Lint: ruff 0.16.10 (in CyberP, listed in `api/requirements-dev.txt`, rules in `ruff.toml`); ESLint 9.39.5
+  with eslint-config-next 15.5.25 (`frontend/eslint.config.mjs`, `npm run lint`). Both found almost
+  nothing: two unused imports in tests.
+- Code colours: `lowlight` 3.3.0 and `rehype-highlight` 7.0.2 (exact versions), `frontend/lib/highlight.ts`;
+  colours per theme in `learn.css` / `themes.css`.
+

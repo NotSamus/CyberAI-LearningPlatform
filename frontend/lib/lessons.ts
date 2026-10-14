@@ -38,6 +38,25 @@ export type ViewBlock =
   | { type: "multiple_choice"; id: string; question: string; options: { id: string; text: string }[]; multiple: boolean; state: CheckState | null }
   | { type: "short_answer"; id: string; question: string; state: CheckState | null };
 
+// A knowledge check, as a reader gets it.
+export type CheckBlock = Extract<ViewBlock, { type: "multiple_choice" | "short_answer" }>;
+
+export function isCheck(block: ViewBlock): block is CheckBlock {
+  return block.type === "multiple_choice" || block.type === "short_answer";
+}
+
+// About how many minutes the lesson's text takes to read, at some 200 words a minute (0: it has no text).
+export function readingMinutes(blocks: ViewBlock[]): number {
+  const words = blocks.reduce((sum, block) => sum + (block.type === "text" ? block.text.split(/\s+/).filter(Boolean).length : 0), 0);
+  return words === 0 ? 0 : Math.max(1, Math.round(words / 200));
+}
+
+// How many of the knowledge checks the reader got right at the first try. Only from what the
+// server said about each check: the page never knows the answers.
+export function rightFirstTime(blocks: ViewBlock[]): number {
+  return blocks.filter((block) => isCheck(block) && block.state?.correct && block.state.attempts === 1).length;
+}
+
 export type Lesson = {
   id: number;
   title: string;
@@ -57,7 +76,7 @@ export type LessonPage = MyLesson & {
   next: { id: number; title: string } | null;
 };
 
-// What Settings > Lessons works with (teachers and admins only).
+// What Teach > Lessons works with (teachers and admins only).
 export type ManagedLesson = Lesson & {
   for_everyone: boolean;
   published_at: string | null;
@@ -120,6 +139,34 @@ export function duplicate(block: Block): Block {
     return { ...block, id: newId(), options: block.options.map((o) => ({ ...o, id: newId() })) };
   }
   return { ...block, id: newId() };
+}
+
+// A heading written in a lesson's text ("#", "##" or "###"): one line of the index beside the lesson.
+// `id` is also the id of the heading on the page (components/Markdown.tsx gives it), and `block`
+// the text block the heading is in.
+export type Topic = { id: string; block: string; level: number; text: string };
+
+export function topicId(block: string, line: number): string {
+  return `topic-${block}-${line}`;
+}
+
+// The headings of a lesson, in order: lines of its text blocks that start with one to three "#".
+// A "#" inside code (between ``` lines) is a comment, not a heading.
+export function outline(blocks: (Block | ViewBlock)[]): Topic[] {
+  const topics: Topic[] = [];
+  for (const block of blocks) {
+    if (block.type !== "text") continue;
+    let inCode = false;
+    block.text.split("\n").forEach((line, index) => {
+      if (/^ {0,3}(```|~~~)/.test(line)) inCode = !inCode;
+      const heading = inCode ? null : line.match(/^ {0,3}(#{1,3})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/);
+      if (!heading) return;
+      // As it reads, without the marks for bold, code and links.
+      const text = heading[2].replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*|__|\*|`|~~/g, "").trim();
+      if (text) topics.push({ id: topicId(block.id, index + 1), block: block.id, level: heading[1].length, text });
+    });
+  }
+  return topics;
 }
 
 // The same rule as `video_id` in api/app/lessons.py, to show the video while editing. What students

@@ -54,6 +54,22 @@ def otter_results(q1: float, q2: float) -> dict:
     ]}
 
 
+def tampered_results() -> dict:
+    """What can come back when the student's code works against the autograder (it runs in the same
+    process as Otter's tests): a public test fails with a line it read from the hidden tests, and q2
+    claims far more points than it has."""
+    stolen = "hidden test square(-3) == 9"
+    return {"tests": [
+        {"name": "Public Tests", "visibility": "visible", "status": "failed", "output": (
+            "q1 results: All test cases passed!\n\n"
+            "q2 results:\n    q2 - 1 result:\n        Test case failed\n        Expected:\n            0\n"
+            f"        Got:\n            '{stolen}'\nq9 results: All test cases passed!"
+        )},
+        {"name": "q1", "score": 2.0, "max_score": 2.0, "visibility": "hidden", "output": "q1 results: All test cases passed!"},
+        {"name": "q2", "score": 99.0, "max_score": 3.0, "visibility": "hidden", "output": f"q2 results:\n    Got: '{stolen}'"},
+    ]}
+
+
 @pytest.fixture
 def otter(monkeypatch):
     """Stands in for the grading service. A submission scores full marks when it contains "x * x"."""
@@ -153,7 +169,8 @@ def test_submit_is_graded_and_shown_to_the_student(lab, hub, otter):
     mine = maria.get("/api/assignments/1").json()["submission"]
     assert (mine["status"], mine["score"], mine["max_score"]) == ("graded", 5.0, 5.0)
     assert mine["questions"] == [{"name": "q1", "score": 2.0, "max_score": 2.0}, {"name": "q2", "score": 3.0, "max_score": 3.0}]
-    assert mine["public_output"] == "q1 results: All test cases passed!"
+    assert mine["public_tests"] == [{"name": "q1", "passed": True}, {"name": "q2", "passed": True}]
+    assert "public_output" not in mine                          # Otter's text about the tests is for teachers
     assert otter["graded"] == ["lab.ipynb", "lab.ipynb"]
 
     # Students never receive what the hidden tests are, nor the autograder's log.
@@ -167,7 +184,32 @@ def test_submit_is_graded_and_shown_to_the_student(lab, hub, otter):
     assert [(r["name"], r["opened_at"] is not None, r["submission"] and r["submission"]["score"]) for r in rows] == \
         [("Jose Perez", False, None), ("Maria Lopez", True, 5.0)]
     assert "hidden test square(-3)" in rows[1]["submission"]["questions"][0]["output"]
+    assert rows[1]["submission"]["public_output"] == "q1 results: All test cases passed!"
     assert jose.get("/api/assignments/1").json()["submission"] is None      # he sees nothing of hers
+
+
+def test_what_the_students_code_makes_otter_say_does_not_reach_them(lab, hub, monkeypatch):
+    teacher, maria, _ = lab
+
+    async def tampered(notebook, autograder, name, gpu):
+        return tampered_results()
+
+    monkeypatch.setattr(grading, "grade", tampered)
+    answer = maria.post("/api/assignments/1/submit").text
+    mine = maria.get("/api/assignments/1").json()["submission"]
+    # Each question counts for at most its points: 2 + 3, not 2 + 99.
+    assert (mine["status"], mine["score"], mine["max_score"]) == ("graded", 5.0, 5.0)
+    assert mine["questions"] == [{"name": "q1", "score": 2.0, "max_score": 2.0}, {"name": "q2", "score": 3.0, "max_score": 3.0}]
+    # Whether each question's public tests passed, and not one word of what they reported.
+    assert mine["public_tests"] == [{"name": "q1", "passed": True}, {"name": "q2", "passed": False}]
+    everything_maria_can_ask = answer + maria.get("/api/assignments/1").text + maria.get("/api/assignments").text
+    for told in ("hidden test", "square(-3)", "Test case failed", "Got:", "q9"):
+        assert told not in everything_maria_can_ask
+
+    # The teacher sees all of it, with the capped score.
+    row = teacher.get("/api/teach/assignments/1/progress").json()["students"][1]["submission"]
+    assert "hidden test square(-3)" in row["public_output"] and "hidden test square(-3)" in row["questions"][1]["output"]
+    assert (row["score"], row["questions"][1]["score"]) == (5.0, 3.0)
 
 
 def test_late_submissions_are_marked(lab, hub, db):
@@ -339,4 +381,49 @@ def test_reading_otter_notebooks_and_results():
     ]
     assert "hidden test" in grading.questions(results, with_hidden_output=True)[0]["output"]
     assert grading.public_output(results) == "q1 results: All test cases passed!"
+    assert grading.public_tests(results) == [{"name": "q1", "passed": True}, {"name": "q2", "passed": True}]
     assert grading.totals({}) == (0.0, 0.0) and grading.questions(None, True) == [] and grading.public_output(None) == ""
+    assert grading.public_tests(None) == [] and grading.public_tests({"tests": [{"name": "q1", "score": 1, "max_score": 1}]}) == []
+
+    # Results are checked, not believed: a score is a number between 0 and the question's points.
+    assert grading.totals(tampered_results()) == (5.0, 5.0)
+    odd = {"tests": [
+        {"name": "q1", "score": "2", "max_score": 2.0}, {"name": "q2", "score": -1, "max_score": 3.0},
+        {"name": "q3", "score": 1, "max_score": True}, {"name": "q4", "score": 1, "max_score": -1}, "not a test",
+    ]}
+    assert grading.totals(odd) == (0.0, 5.0)
+    assert [q["score"] for q in grading.questions(odd, with_hidden_output=False)] == [0.0, 0.0]
+
+
+
+def test_the_list_of_assignments_counts_where_students_are(people, hub, db):
+    teacher, maria, jose = people
+    upload(teacher, "Essay")
+    teacher.patch("/api/teach/assignments/1", json={"for_everyone": True, "published": True, "points": 10})
+    upload(teacher, "Given to nobody yet")
+    teacher.post("/api/teach/courses", json={"name": "CS 101"})
+    teacher.patch("/api/teach/courses/1", json={"student_ids": [3]})
+    upload(teacher, "For the course")
+    teacher.patch("/api/teach/assignments/3", json={"course_id": 1, "student_ids": [2], "published": True})
+
+    for student in (maria, jose):
+        student.post("/api/assignments/1/launch")
+    teacher.post("/api/assignments/1/launch")                   # a teacher trying it out does not count
+    hub[("s-2", "assignments/essay-1/lab.ipynb")] = notebook_file("# my essay")
+    maria.post("/api/assignments/1/submit")
+
+    def counted():
+        return {a["title"]: a["counts"] for a in teacher.get("/api/teach/assignments").json()}
+
+    essay = counted()["Essay"]
+    assert essay.pop("oldest_waiting_at") is not None
+    assert essay == {"given": 2, "opened": 2, "submitted": 1, "graded": 0, "to_grade": 1, "failed": 0, "late": 0}
+    assert counted()["Given to nobody yet"] == {
+        "given": 0, "opened": 0, "submitted": 0, "graded": 0, "to_grade": 0, "failed": 0, "late": 0, "oldest_waiting_at": None,
+    }
+    assert counted()["For the course"]["given"] == 2              # jose through the course, maria by name
+
+    teacher.patch("/api/teach/assignments/1/submissions/2", json={"score": 9})
+    essay = counted()["Essay"]
+    assert (essay["to_grade"], essay["graded"], essay["oldest_waiting_at"]) == (0, 1, None)
+    assert maria.get("/api/teach/assignments").status_code == 403
