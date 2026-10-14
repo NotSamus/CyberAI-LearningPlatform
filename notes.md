@@ -103,6 +103,9 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - An upload is only read after the account has been checked, so a non-teacher cannot push a big file at the server.
 
 ### Letting other devices on my network use it
+- On iqsec.cs.utep.edu only SSH (22) gets through the firewall; Docker's 8081 does too, Next.js's 3000
+  does not. From my Mac (on the VPN): `./dev-tunnel.sh iqsec.cs.utep.edu` starts dev.sh there and
+  shares it at my Mac's address. Stop any ./dev.sh already running on the server first. (2026-10-14)
 - `FRONTEND_PORT=3001 ./dev.sh --lan`, then open the address it prints
   (on this Mac it was `http://192.168.1.9:3001`).
 - Use that address on the Mac too: logging in at `localhost` is refused in this mode.

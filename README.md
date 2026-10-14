@@ -31,6 +31,7 @@ assignments/<id>/              example notebooks to import, one of them autograd
 deploy/                        production stack, hub config, notebook images, scripts
 dev.sh                         start everything: Postgres (:5433), JupyterHub (:8081), grader (:8090), backend (:8003), frontend (:3000)
 dev-hub.sh                     start/stop only the local JupyterHub in Docker (dev.sh calls it)
+dev-tunnel.sh                  run dev.sh on a server that only lets SSH through, shared on your network through your computer
 check.sh                       every check: ruff, the tests (on a Postgres of their own), tsc and ESLint
 ```
 
@@ -71,6 +72,20 @@ Wi-Fi or Ethernet network (`DEV_HOST=<address> ./dev.sh --lan` if it picks the w
 address on this computer too: logging in does not work at `localhost` while in this mode. macOS may ask
 once whether to allow incoming connections. A VPN or a network that keeps devices apart (many guest and
 campus networks do) can prevent other devices from connecting.
+
+When the site runs on a server whose firewall lets only SSH through (port 3000 there times out from
+other computers), run this on your own computer instead:
+
+```bash
+./dev-tunnel.sh iqsec.cs.utep.edu     # the server as named in ~/.ssh/config, or user@host
+```
+
+It starts `./dev.sh --lan` on the server over SSH, with your computer's address, and forwards ports 3000
+and 8081 from your computer to the server. People on your network then open
+`http://<your computer's address>:3000`, the address it prints; you too, not `localhost`. Stop any
+`./dev.sh` already running on the server first. Your computer has to stay on and connected while people
+use the site, and its address changes when it joins another network, so run the script again after
+moving. Ctrl+C stops the tunnel and everything on the server.
 
 This is for trying the site with people you trust, not for a class:
 
