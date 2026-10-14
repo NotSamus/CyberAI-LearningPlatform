@@ -1,6 +1,6 @@
 # Local development services: Postgres, JupyterHub and the grader (no GPU, no TLS). ../dev.sh starts
 # them all; ../dev-hub.sh starts only the hub.
-# Browser -> http://localhost:8081 ; hub -> backend on the host via host.docker.internal:8000
+# Browser -> http://localhost:8081 ; hub -> backend on the host via host.docker.internal:8003
 # Backend on the host -> Postgres on localhost:5433
 name: cyberai-dev
 services:
@@ -29,7 +29,7 @@ services:
       # instead of localhost, and random secrets instead of the two well-known ones below).
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
       HUB_ORIGIN: ${HUB_ORIGIN:-http://localhost:8081}
-      PLATFORM_INTERNAL_URL: ${PLATFORM_INTERNAL_URL:-http://host.docker.internal:8000}
+      PLATFORM_INTERNAL_URL: ${PLATFORM_INTERNAL_URL:-http://host.docker.internal:8003}
       OAUTH_CLIENT_ID: jupyterhub
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-dev-oauth-secret}
       PLATFORM_HUB_API_TOKEN: ${HUB_API_TOKEN:-dev-hub-api-token}

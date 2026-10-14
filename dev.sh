@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Starts everything: Postgres, JupyterHub and the grader (Docker), backend (:8000) and frontend (:3000),
+# Starts everything: Postgres, JupyterHub and the grader (Docker), backend (:8003) and frontend (:3000),
 # and applies database migrations. Ctrl+C (or closing the terminal) stops all of it, including
 # every student notebook container. Database contents and student files are kept.
-# When 3000 or 8000 is taken by another project:  FRONTEND_PORT=3001 BACKEND_PORT=8001 ./dev.sh
+# The backend moves to the next free port when 8003 is taken (BACKEND_PORT=... picks where it starts).
+# When 3000 is taken by another project:  FRONTEND_PORT=3001 ./dev.sh
 #
 # ./dev.sh --lan   lets other devices on the same network (Wi-Fi) open the site, at
 #                  http://<this computer's address>:3000. For trying it out with people you trust:
@@ -13,7 +14,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/api"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 
-BACKEND_PORT="${BACKEND_PORT:-8000}"
+BACKEND_PORT="${BACKEND_PORT:-8003}"     # not 8000: other projects on the same computer often have it
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 lan_address() {
@@ -42,6 +43,22 @@ if [ "${1:-}" = "--lan" ]; then
 fi
 export DEV_HOST="${DEV_HOST:-localhost}"                                   # frontend (next.config.ts)
 
+port_in_use() {
+  # Only a listening server counts; Docker Desktop keeps closed client sockets to these ports around.
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null   # no lsof (some Linux servers): does anything answer?
+  fi
+}
+
+# The backend takes the first free port from BACKEND_PORT up. Decided before the exports below, so
+# the frontend and the hub are told the port it really runs on.
+REQUESTED_BACKEND_PORT="$BACKEND_PORT"
+while port_in_use "$BACKEND_PORT"; do
+  BACKEND_PORT=$((BACKEND_PORT + 1))
+done
+
 # The backend, the frontend and the hub each need to know where the others are.
 export APP_ORIGIN="http://$DEV_HOST:$FRONTEND_PORT"                        # backend, hub
 export HUB_ORIGIN="http://$DEV_HOST:8081"                                  # backend, hub
@@ -51,11 +68,6 @@ export PLATFORM_INTERNAL_URL="http://host.docker.internal:$BACKEND_PORT"   # hub
 
 compose_dev() {
   docker compose -f "$ROOT_DIR/deploy/docker-compose.dev.yml" "$@"
-}
-
-port_in_use() {
-  # Only a listening server counts; Docker Desktop keeps closed client sockets to these ports around.
-  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
 }
 
 cleanup() {
@@ -93,11 +105,11 @@ else
   echo "   Docker is not running - skipping Postgres and JupyterHub (no database; Open Notebook will report it unreachable)."
 fi
 
-if port_in_use $BACKEND_PORT; then
-  echo "   Backend port $BACKEND_PORT already in use - skipping uvicorn."
+(cd "$BACKEND_DIR" && uvicorn app.main:app --reload --host 0.0.0.0 --port $BACKEND_PORT) &
+BACKEND_PID=$!
+if [ "$BACKEND_PORT" != "$REQUESTED_BACKEND_PORT" ]; then
+  echo "   Backend  -> http://localhost:$BACKEND_PORT  (docs at /docs; $REQUESTED_BACKEND_PORT was taken)"
 else
-  (cd "$BACKEND_DIR" && uvicorn app.main:app --reload --host 0.0.0.0 --port $BACKEND_PORT) &
-  BACKEND_PID=$!
   echo "   Backend  -> http://localhost:$BACKEND_PORT  (docs at /docs)"
 fi
 

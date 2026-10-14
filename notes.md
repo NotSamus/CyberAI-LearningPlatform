@@ -33,8 +33,11 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 ## How accounts, Settings and the JupyterHub panel work (2026-10-02)
 
 ### Running it locally
-- Ports 3000/8000 are often used by other projects on this Mac. Run this one on other ports:
-  `FRONTEND_PORT=3001 BACKEND_PORT=8001 ./dev.sh` (CyberP env active), then open http://localhost:3001.
+- Ports 3000/8000 are often used by other projects (MaLLM's backend is on 8000). Since 2026-10-14 the
+  backend starts on 8003 and `dev.sh` moves it to the next free port by itself. If 3000 is taken:
+  `FRONTEND_PORT=3001 ./dev.sh` (CyberP env active), then open http://localhost:3001.
+- Run `./dev.sh` with `CyberP` active, not `(base)`: `(base)` has no uvicorn or alembic, so the backend
+  never starts and every page shows ECONNREFUSED errors for `/api/...`.
 - Ctrl+C in that terminal stops everything. Database contents and notebook files are kept.
 
 ### The JupyterHub panel (Settings > JupyterHub)
@@ -100,7 +103,7 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - An upload is only read after the account has been checked, so a non-teacher cannot push a big file at the server.
 
 ### Letting other devices on my network use it
-- `FRONTEND_PORT=3001 BACKEND_PORT=8001 ./dev.sh --lan`, then open the address it prints
+- `FRONTEND_PORT=3001 ./dev.sh --lan`, then open the address it prints
   (on this Mac it was `http://192.168.1.9:3001`).
 - Use that address on the Mac too: logging in at `localhost` is refused in this mode.
 - Plain http: use test accounts only. A real password would cross the network unencrypted.

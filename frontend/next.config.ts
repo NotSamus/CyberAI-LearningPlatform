@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const HUB_ORIGIN = process.env.NEXT_PUBLIC_HUB_ORIGIN ?? "http://localhost:8081";
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8003";
 
 // `./dev.sh --lan` serves the dev site at this computer's network address instead of localhost.
 const DEV_HOST = process.env.DEV_HOST ?? "localhost";

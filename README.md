@@ -29,7 +29,7 @@ frontend/                      Next.js + TypeScript app: login, Home (what to do
                                lesson page, notebook page with iframe and Submit, Teach (/teach), Admin (/admin), My account
 assignments/<id>/              example notebooks to import, one of them autograded (see Assignments below)
 deploy/                        production stack, hub config, notebook images, scripts
-dev.sh                         start everything: Postgres (:5433), JupyterHub (:8081), grader (:8090), backend (:8000), frontend (:3000)
+dev.sh                         start everything: Postgres (:5433), JupyterHub (:8081), grader (:8090), backend (:8003), frontend (:3000)
 dev-hub.sh                     start/stop only the local JupyterHub in Docker (dev.sh calls it)
 check.sh                       every check: ruff, the tests (on a Postgres of their own), tsc and ESLint
 ```
@@ -45,7 +45,9 @@ pip install -r api/requirements.txt
 ```
 
 `dev.sh` starts Postgres, applies the migrations in `sql/`, then starts the rest.
-If port 3000 or 8000 is taken by another project, pick others: `FRONTEND_PORT=3001 BACKEND_PORT=8001 ./dev.sh`
+The backend runs on port 8003, or on the next free port when another project has 8003; `dev.sh` prints
+which one (`BACKEND_PORT=8010 ./dev.sh` starts looking at 8010 instead).
+If port 3000 is taken by another project, pick another: `FRONTEND_PORT=3001 ./dev.sh`
 (then open http://localhost:3001).
 Ctrl+C (or closing the terminal) stops everything, including every student notebook container.
 Student files are kept in Docker volumes (`jupyterhub-user-*`) and the database in `cyberai-dev_pg-data`,
@@ -61,7 +63,7 @@ If Docker is not running, nobody can log in (the accounts are in Postgres).
 ### Letting other devices on your network use it
 
 ```bash
-./dev.sh --lan          # with other ports:  FRONTEND_PORT=3001 BACKEND_PORT=8001 ./dev.sh --lan
+./dev.sh --lan          # with another frontend port:  FRONTEND_PORT=3001 ./dev.sh --lan
 ```
 
 It prints the address to open, for example `http://192.168.1.9:3000`: this computer's address on the

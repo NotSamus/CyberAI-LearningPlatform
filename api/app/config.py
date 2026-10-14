@@ -1,6 +1,6 @@
 """Settings from environment variables, with defaults that work for local development.
 
-Local dev layout:  Next.js :3000  |  uvicorn :8000  |  dev JupyterHub :8081  |  grader :8090  |  dev Postgres :5433  (./dev.sh)
+Local dev layout:  Next.js :3000  |  uvicorn :8003 (or the next free port)  |  dev JupyterHub :8081  |  grader :8090  |  dev Postgres :5433  (./dev.sh)
 `./dev.sh --lan` sets APP_ORIGIN and HUB_ORIGIN to this computer's network address instead of localhost.
 Production values come from deploy/.env via docker-compose.
 """
