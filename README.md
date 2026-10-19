@@ -105,6 +105,111 @@ what a logged-in browser would get. Through `dev-tunnel.sh`, the site and the hu
 server's own localhost, where the tunnel reaches them, so the hub's port does not get through the
 server's firewall (Docker's published ports otherwise do).
 
+## Settings (environment variables)
+
+On a server, every setting is in one file, `deploy/.env`, which `docker compose` reads from `deploy/`.
+Start from this template (it is also `deploy/.env.example`): copy it, then fill in the addresses and a
+new secret for each `change-me`. Never commit `deploy/.env`.
+
+```bash
+cd deploy && cp .env.example .env && openssl rand -hex 32    # once per secret
+```
+
+```bash
+# Settings for the whole stack on a server (deploy/docker-compose.yml). Copy this file to
+# deploy/.env and fill it in; docker compose reads it from deploy/. Every variable is described in
+# README.md, "Settings (environment variables)". Never commit deploy/.env: it holds the secrets.
+
+# --- Addresses -----------------------------------------------------------------------------------
+# The site and the notebooks, each on its own name under one parent domain (both under utep.edu, say).
+# APP_ORIGIN must be exactly what people type to reach the site: the backend refuses logins from anything else.
+APP_DOMAIN=app.school.example
+HUB_DOMAIN=hub.school.example
+APP_ORIGIN=https://app.school.example
+HUB_ORIGIN=https://hub.school.example
+
+# --- Secrets: each one new, from `openssl rand -hex 32` ------------------------------------------
+# The backend refuses to start with one shorter than 32 characters, containing "dev-", or "change-me".
+OAUTH_CLIENT_ID=jupyterhub
+OAUTH_CLIENT_SECRET=change-me
+PLATFORM_HUB_API_TOKEN=change-me
+JUPYTERHUB_CRYPT_KEY=change-me
+POSTGRES_PASSWORD=change-me
+GRADER_TOKEN=change-me
+
+# --- Notebook images and GPUs --------------------------------------------------------------------
+# GPU notebooks for everyone: off until they are taken up again. "on" turns them back on (backend and hub).
+GPU_NOTEBOOKS=off
+# The GPUs students may use (nvidia-smi numbers, comma separated), and how many servers share one.
+GPU_IDS=0
+MAX_SESSIONS_PER_GPU=4
+# The images students' notebooks (and the autograder) run in: build them first, see deploy/README.md.
+CPU_IMAGE=cyberai/notebook-cpu:latest
+GPU_IMAGE=cyberai/notebook-gpu:latest
+
+# --- Limits --------------------------------------------------------------------------------------
+# What one person's notebook server may use (per server; caps, not reserved). Applies to servers
+# started afterwards: `docker compose up -d jupyterhub`, then running servers pick it up once restarted.
+CPU_PROFILE_CPUS=1
+CPU_PROFILE_MEM=2G
+GPU_PROFILE_CPUS=4
+GPU_PROFILE_MEM=12G
+# The autograder: memory and seconds per job, and how many jobs run at once (`docker compose up -d grader`).
+GRADER_MEMORY=2g
+GRADER_TIMEOUT=300
+GRADER_PARALLEL=2
+```
+
+| Variable | Needed | Default | What it is | Read by |
+| --- | --- | --- | --- | --- |
+| `APP_DOMAIN` | yes | | The site's name; Caddy gets its certificate | Caddy |
+| `HUB_DOMAIN` | yes | | The notebooks' name, under the same parent domain as the site | Caddy |
+| `APP_ORIGIN` | yes | | Exactly the address people type, `https://` and no path. Logins and changes from anywhere else are refused | backend, hub |
+| `HUB_ORIGIN` | yes | | The notebooks' address. Built into the frontend: run `docker compose up -d --build frontend` after changing it | backend, hub, frontend |
+| `OAUTH_CLIENT_ID` | yes | `jupyterhub` | The hub's name when it logs people in through the platform | backend, hub |
+| `OAUTH_CLIENT_SECRET` | yes, secret | | Shared by the hub and the backend for that login | backend, hub |
+| `PLATFORM_HUB_API_TOKEN` | yes, secret | | The backend's key to the hub's API (starting servers, copying notebooks) | backend, hub |
+| `JUPYTERHUB_CRYPT_KEY` | yes, secret | | Encrypts what the hub keeps about each login | hub |
+| `POSTGRES_PASSWORD` | yes, secret | | The database password | database, backend |
+| `GRADER_TOKEN` | yes, secret | | The backend's key to the grading service | backend, grader |
+| `GPU_NOTEBOOKS` | no | `off` | `on` lets GPU assignments and GPU notebooks start again, for everyone | backend, hub |
+| `GPU_IDS` | yes | `0` | The GPUs students may use (`nvidia-smi` numbers, comma separated) | hub |
+| `MAX_SESSIONS_PER_GPU` | yes | `4` | GPU notebook servers sharing one GPU; each gets that share of its memory | hub |
+| `CPU_IMAGE`, `GPU_IMAGE` | yes | `cyberai/notebook-cpu:latest`, `cyberai/notebook-gpu:latest` | The images notebooks and grading jobs run in | hub, grader |
+| `CPU_PROFILE_CPUS`, `CPU_PROFILE_MEM` | no | `1`, `2G` | Most one person's CPU notebook server may use | hub |
+| `GPU_PROFILE_CPUS`, `GPU_PROFILE_MEM` | no | `4`, `12G` | Most one person's GPU notebook server may use | hub |
+| `GRADER_MEMORY`, `GRADER_TIMEOUT` | no | `2g`, `300` | One grading job's memory, and seconds before it is stopped | grader |
+| `GRADER_PARALLEL` | no | `2` | Grading jobs at once; the others wait their turn | grader |
+
+"Needed: yes" with a default means: keep the template's value unless you have a reason. Those are
+passed as they are: an empty `MAX_SESSIONS_PER_GPU` stops the hub, an empty image name or `GPU_IDS`
+leaves notebooks unable to start. The limits are caps, not reserved memory: see
+`deploy/README.md` ("CPU and memory of notebook servers and grading jobs") before raising them. After
+changing `deploy/.env`, `docker compose up -d` restarts what uses the changed values.
+
+**Set by the stack itself, not in `deploy/.env`:** `DATABASE_URL` (built from `POSTGRES_PASSWORD`),
+`HUB_API_URL` and `HUB_API_TOKEN` (the backend's names for the hub and `PLATFORM_HUB_API_TOKEN`),
+`GRADER_URL`, `PLATFORM_INTERNAL_URL`, `DOCKER_NETWORK_NAME` and `NEXT_PUBLIC_HUB_ORIGIN` (from
+`HUB_ORIGIN`, when the frontend is built), all in `deploy/docker-compose.yml`. The hub gives each
+notebook server `FRAME_ANCESTORS` (only the site may show it in a frame) and `GPU_MEM_FRACTION` (its
+share of a GPU).
+
+**Running it locally (`./dev.sh`)** needs no `.env` file: everything has a development value in the
+code or in `deploy/docker-compose.dev.yml`, and the secrets are made new on every start. What can be
+set on the command line:
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `FRONTEND_PORT` | `3000` | The site's port: `FRONTEND_PORT=3001 ./dev.sh` when 3000 is taken |
+| `BACKEND_PORT` | `8003` | Where the backend starts; it moves to the next free port by itself |
+| `DEV_HOST` | `localhost` | The site's address. With `--lan`, this computer's network address (found by itself) |
+| `LISTEN_ADDRESS` | `127.0.0.1` | Where the site and the hub listen; `--lan` makes it `0.0.0.0` |
+| `GPU_NOTEBOOKS` | `off` | `GPU_NOTEBOOKS=on ./dev.sh` tries GPU notebooks (a pretend GPU on a laptop) |
+| `REMOTE_DIR`, `CONDA_ENV` | `CyberAI-LearningPlatform`, `llm` | For `./dev-tunnel.sh`: the project's folder on the server, and the conda environment to start it in |
+| `PYTHON` | `python` | The Python `./check.sh` uses |
+| `TEST_DATABASE_URL` | the test Postgres on port 5434 | Where the tests make their throwaway databases; they stop if it is the platform's own |
+| `BACKEND_URL` | `http://localhost:8003` | Where the frontend sends `/api` when it is run without `dev.sh` |
+
 ## Accounts
 
 There is no public sign-up. The first admin is created from the command line, while `dev.sh` is running:
