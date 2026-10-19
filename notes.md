@@ -503,3 +503,73 @@ session; 3 (one address for every notebook server) needs a wildcard DNS name and
   without stopping (q1 out of 2, q2 out of 3).
 - On the server: `git pull`, `docker compose up -d --build`, run the migration; teachers lose hub admin
   at their next hub login (or untick it in Admin > JupyterHub). Steps in `deploy/README.md`.
+
+## Students have only a username; made-up usernames (2026-10-19)
+- **Decision: the platform stores no real name for a student, only a username.** Teachers keep their
+  names (shown to their students). A student's `display_name` is their username.
+- One rule for it, `auth.check_name()` in `api/app/auth.py`: a name for a student is refused when an
+  account is created (site and command line) and when one is edited (`PATCH /api/admin/users/<id>`), 400
+  "Students have no name here, only a username."
+- Made-up usernames like Xbox gamertags: adjective + noun + 2 to 4 digits (`swiftfalcon482`), from the
+  word lists in `api/app/usernames.py` (70 x 70 words). No people, bodies, skin colours, violence, or
+  animals with a second meaning; joined pairs are checked against a list of rude strings (`BLOCKED`, also
+  69 / 88 / 420 / 666 in the digits) by `test/api/test_usernames.py`. Never one that is already taken.
+  - Site: `GET /api/admin/username-suggestion` (admins only). Admin > Accounts > Add account starts on
+    Student with a suggestion filled in; the dice beside Username makes another; it can be typed over.
+    Choosing Teacher takes an untouched suggestion out and shows "Full name". Role is now the first field.
+  - Command line: `python -m app.manage create-user --random [--gpu]` prints the username it made.
+    `--name` is refused for students.
+- Edit for a student shows only "GPU notebooks". Tables (Accounts, gradebook, lesson progress), the
+  student picker and My account show a student's username once instead of "name (username)".
+- The gradebook CSV keeps its Name column: for students it holds the username.
+- No database change: the `display_name` column stays, for teachers.
+
+### No migration for existing students
+- Not needed: there are no real students yet (said 2026-10-19), so no stored student has a real name to
+  clear. Every student added from now on gets none. The dev database's one test student still has the
+  name it was made with; remove it in Admin > Accounts, or leave it (it is test data).
+
+### Checked
+- `ruff`, the tests (117 pass, on the test Postgres, 5434), tsc and ESLint.
+- Admin > Accounts in the dev browser at 768, 1024 and 1440 px, light and dark, with made-up accounts
+  fed to the page: Add account as a student (suggestion, dice, sent without a name), switching to Teacher
+  and back, the password box, Edit for a student and for a teacher.
+
+### Not verified
+- Against the real backend in the browser (the page was fed made-up answers), and on a real iPad.
+- The gradebook, lesson progress, student picker and My account pages were not opened after the change
+  (one-line changes, type-checked).
+- When Add account opens, the focus is on the dialog's Close button, not on Username (React's autoFocus
+  runs before the dialog is shown). Fixed separately in `components/Dialog.tsx` in the main checkout;
+  this work leaves Dialog.tsx alone, so it is fixed once both are merged.
+- The confirm boxes for New password and Remove still say "quietorca58 (quietorca58)" for a student.
+
+## GPU notebooks turned off for now (2026-10-19)
+- **Decision: GPU notebooks are off for the whole platform until we come back to them.** The options
+  stay: "GPU notebooks" on accounts and "Needs a GPU" on assignments can still be set and are stored.
+- One setting, `GPU_NOTEBOOKS` (`off` when not set, `on` turns them back on), read by the backend
+  (`api/app/config.py`) and by the hub (`deploy/jupyterhub/jupyterhub_config.py`). Passed to both in
+  `deploy/docker-compose.yml` and to the dev hub in `deploy/docker-compose.dev.yml`; in `.env.example`.
+- While off:
+  - A GPU assignment opens, is submitted and stopped in the standard (CPU) environment
+    (`_server_for` in `api/app/jupyter/launch.py`). Both servers share one home, so students keep
+    the same file when GPUs come back. Chosen over refusing to open GPU assignments; refusing would be
+    a one-line change in `_server_for`.
+  - The hub refuses to start any GPU server, even asked directly ("GPU notebooks are turned off for now.").
+    Needed because teachers pass the hub's GPU check through the `teachers` group.
+  - `/api/me` has `gpu_notebooks: false`. Students do not see "GPU" on those assignments (Home, the
+    assignment page). Beside the GPU options in Accounts and in the assignment form: "turned off for now".
+  - Hub groups are unchanged (the `gpu` group is still given), so turning it back on needs nothing else.
+  - Grading unchanged: GPU assignments were already graded in the GPU image without a GPU.
+  - In the CPU image `import torch` fails, so a GPU notebook that needs PyTorch will not run until GPUs
+    are back.
+- To turn them on: `GPU_NOTEBOOKS=on ./dev.sh`, or `GPU_NOTEBOOKS=on` in `deploy/.env` and
+  `docker compose up -d --build` on the server (the hub's config is built into its image).
+
+### Not verified
+- The hub's refusal was not tried on a running hub (no test can load `jupyterhub_config.py`); only
+  read and linted. The dev hub picks it up the next time `./dev.sh` starts it (`up --build`).
+- Checked: 118 tests pass (new: a GPU assignment opens and stops on the CPU server while off, and on
+  the GPU server when on), ruff, tsc, ESLint. In the dev browser (made-up data, light, one width): the
+  note beside "Needs a GPU" on Upload notebook and beside "GPU notebooks" in Add account.
+- Not looked at: the assignment Settings tab, Edit account, and what students see (Home, assignment page).

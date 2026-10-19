@@ -321,6 +321,7 @@ dialog.dialog::backdrop { background: hsla(220, 30%, 8%, 0.6); }
 .dialog-body { display: grid; gap: var(--s4); padding: var(--s5); }
 .dialog-body label { display: grid; gap: var(--s1); font-size: var(--t-sm); font-weight: var(--bold); }
 .dialog-body label.check { display: flex; align-items: center; gap: var(--s2); font-weight: 400; }
+.dialog-body .field { display: grid; gap: var(--s1); }       /* a label, and a field with a button beside it */
 .dialog-body > p { margin: 0; }
 .dialog-foot { display: flex; justify-content: flex-end; gap: var(--s2); padding: var(--s4) var(--s5); background: var(--bg); border-top: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); }
 /* The "more" menu (⋯) for actions that are rare or cannot be undone, and the menu under your name */

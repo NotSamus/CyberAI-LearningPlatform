@@ -159,8 +159,8 @@ def browser(username: str) -> TestClient:
 def people(db):
     """A teacher (id 1) and two students, maria (id 2) and jose (id 3), each in their own browser."""
     auth.create_user(db, "teacher", PASSWORD, role="teacher")
-    auth.create_user(db, "maria", PASSWORD, display_name="Maria Lopez")
-    auth.create_user(db, "jose", PASSWORD, display_name="Jose Perez")
+    auth.create_user(db, "maria", PASSWORD)            # students have no name, only a username
+    auth.create_user(db, "jose", PASSWORD)
     return browser("teacher"), browser("maria"), browser("jose")
 
 

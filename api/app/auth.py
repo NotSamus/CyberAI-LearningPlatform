@@ -77,6 +77,13 @@ def check_new_username(db: Session, username: str) -> str:
     return username
 
 
+def check_name(role: str, name: str | None) -> None:
+    """Students are known on the platform by their username only: no real name is stored for them.
+    Teachers may have a name, shown to their students."""
+    if role == "student" and (name or "").strip():
+        raise AccountError("Students have no name here, only a username.")
+
+
 def create_user(
     db: Session,
     username: str,
@@ -90,6 +97,7 @@ def create_user(
     username = check_new_username(db, username)
     if role not in ROLES:
         raise AccountError(f"The role must be one of: {', '.join(ROLES)}.")
+    check_name(role, display_name)
     check_password(password)
     user = User(
         username=username,

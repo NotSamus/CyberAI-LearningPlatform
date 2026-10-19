@@ -196,7 +196,7 @@ def test_submit_is_graded_and_shown_to_the_student(lab, hub, otter):
     # The teacher's gradebook has every student, and the hidden tests' output.
     rows = teacher.get("/api/teach/assignments/1/progress").json()["students"]
     assert [(r["name"], r["opened_at"] is not None, r["submission"] and r["submission"]["score"]) for r in rows] == \
-        [("Jose Perez", False, None), ("Maria Lopez", True, 5.0)]
+        [("jose", False, None), ("maria", True, 5.0)]
     assert "hidden test square(-3)" in rows[1]["submission"]["questions"][0]["output"]
     assert rows[1]["submission"]["public_output"] == "q1 results: All test cases passed!"
     assert jose.get("/api/assignments/1").json()["submission"] is None      # he sees nothing of hers
@@ -388,8 +388,8 @@ def test_teacher_opens_downloads_and_exports(lab, hub, db):
 
     lines = teacher.get("/api/teach/assignments/1/grades.csv").text.splitlines()
     assert lines[0] == "Name,Username,Opened,Submitted,Late,Status,Score,Out of"
-    assert lines[1].startswith("Jose Perez,jose,,,,not started,,")
-    assert lines[2].startswith("Maria Lopez,maria,2") and lines[2].endswith(",graded,5.0,5.0")
+    assert lines[1].startswith("jose,jose,,,,not started,,")
+    assert lines[2].startswith("maria,maria,2") and lines[2].endswith(",graded,5.0,5.0")
 
     for path in ["/api/teach/assignments/1/submissions/3/notebook", "/api/teach/assignments/9/submissions/2/notebook"]:
         assert teacher.get(path).status_code == 404

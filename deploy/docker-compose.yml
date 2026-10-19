@@ -33,6 +33,7 @@ services:
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:?set it in deploy/.env}
       DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD:?set it in deploy/.env}@db:5432/platform
+      GPU_NOTEBOOKS: ${GPU_NOTEBOOKS:-off}       # also on the hub below: both must agree
       GRADER_URL: http://grader:8000
       GRADER_TOKEN: ${GRADER_TOKEN:?set it in deploy/.env}
     networks: [web, data, grading]
@@ -73,6 +74,7 @@ services:
       PLATFORM_HUB_API_TOKEN: ${PLATFORM_HUB_API_TOKEN:?set it in deploy/.env}
       JUPYTERHUB_CRYPT_KEY: ${JUPYTERHUB_CRYPT_KEY:?set it in deploy/.env}
       DOCKER_NETWORK_NAME: jupyter-users
+      GPU_NOTEBOOKS: ${GPU_NOTEBOOKS:-off}
       GPU_IDS: ${GPU_IDS}
       MAX_SESSIONS_PER_GPU: ${MAX_SESSIONS_PER_GPU}
       CPU_IMAGE: ${CPU_IMAGE}

@@ -148,7 +148,7 @@ export default function OpenNotebook({ assignmentId }: { assignmentId: string })
       />
       <p className="meta">
         <DueDate due_at={assignment.due_at} done={Boolean(submission)} />
-        {environment(assignment.requires_gpu)}
+        {environment(assignment.requires_gpu && Boolean(me?.gpu_notebooks))}
         {assignment.points !== null && <span className="fact"><Award aria-hidden />{points(assignment.points)} points</span>}
         {assignment.autograded
           ? <span className="fact"><Bot aria-hidden />Graded automatically</span>

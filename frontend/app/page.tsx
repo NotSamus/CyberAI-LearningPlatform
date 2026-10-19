@@ -93,7 +93,7 @@ export default function Home() {
           {loaded && known && !empty && <DueSoon assignments={items} asTeacher={teacher} shown={upNext} />}
           <Announcements items={news} />
           {loaded && known && byCourse(lessons, items).map((group) => (
-            <CourseSection key={group.id ?? "everyone"} group={group} asTeacher={teacher} />
+            <CourseSection key={group.id ?? "everyone"} group={group} asTeacher={teacher} gpuOn={Boolean(me?.gpu_notebooks)} />
           ))}
         </div>
         {loaded && known && today && <HomeSide today={today} assignments={items} asTeacher={teacher} />}

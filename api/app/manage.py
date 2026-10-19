@@ -1,10 +1,14 @@
 """Accounts and assignments from the command line. Run from api/ (production: `docker compose exec backend ...`).
 
     python -m app.manage create-user USERNAME [--name "Full Name"] [--role student|teacher] [--admin] [--gpu]
+    python -m app.manage create-user --random [--gpu]
     python -m app.manage set-admin USERNAME [--remove]
     python -m app.manage set-password USERNAME
     python -m app.manage list-users
     python -m app.manage import-assignment FILE.ipynb --title "Title" [--description "..."] [--gpu] [--publish]
+
+Students have a username and no name: --name is for teachers only. --random makes up a username
+nobody has yet, like "swiftfalcon482" (app/usernames.py), and prints it.
 
 `import-assignment` does what the upload in Settings > Assignments does, for a notebook file on this
 machine (an Otter Assign notebook becomes an autograded assignment; the grading service must be
@@ -23,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app import assignments, auth, grading
+from app import assignments, auth, grading, usernames
 from app.db import SessionLocal
 from app.models import ROLES, User
 
@@ -51,9 +55,13 @@ def describe(user: User) -> str:
 
 def run(args: argparse.Namespace, db: Session) -> None:
     if args.command == "create-user":
-        auth.check_new_username(db, args.username)          # before asking for a password
+        if bool(args.username) == args.random:
+            sys.exit("Give a username, or --random for a made-up one.")
+        username = usernames.suggest(db) if args.random else args.username
+        auth.check_new_username(db, username)               # before asking for a password
+        auth.check_name(args.role, args.name)
         user = auth.create_user(
-            db, args.username, read_password(),
+            db, username, read_password(),
             display_name=args.name, role=args.role, is_admin=args.admin, gpu_enabled=args.gpu,
         )
         print(f"Created {describe(user)}")
@@ -96,8 +104,9 @@ def main(argv: list[str] | None = None) -> None:
     commands = parser.add_subparsers(dest="command", required=True)
 
     create = commands.add_parser("create-user", help="create an account (asks for its password)")
-    create.add_argument("username")
-    create.add_argument("--name", help="display name (default: the username)")
+    create.add_argument("username", nargs="?")
+    create.add_argument("--random", action="store_true", help="make up a username instead, like swiftfalcon482")
+    create.add_argument("--name", help="a teacher's display name (default: the username); students have none")
     create.add_argument("--role", choices=ROLES, default="student")
     create.add_argument("--admin", action="store_true", help="may manage accounts")
     create.add_argument("--gpu", action="store_true", help="may use GPU notebooks (teachers always may)")

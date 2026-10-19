@@ -121,6 +121,9 @@ c.Spawner.disable_user_config = True
 # Local development on a machine without an NVIDIA GPU: the "gpu" profile still exists and keeps
 # its entitlement and slot checks, but no device is attached to the container.
 FAKE_GPU = os.environ.get("DEV_FAKE_GPU", "") == "1"
+# GPU notebooks for the whole platform (the backend reads the same variable, api/app/config.py).
+# Off (the default) until they are taken up again: no GPU server is started for anyone.
+GPU_NOTEBOOKS = os.environ.get("GPU_NOTEBOOKS", "off") == "on"
 
 GPU_IDS = [g for g in os.environ.get("GPU_IDS", "0").split(",") if g]
 MAX_SESSIONS_PER_GPU = int(os.environ.get("MAX_SESSIONS_PER_GPU", "4"))
@@ -176,6 +179,9 @@ def pre_spawn_hook(spawner):
     }
 
     if profile["gpu"]:
+        if not GPU_NOTEBOOKS:
+            raise PermissionError("GPU notebooks are turned off for now.")
+
         # 1. Entitlement: group membership is controlled by the platform
         groups = {g.name for g in spawner.user.groups}
         if not ({"gpu", "teachers"} & groups):

@@ -44,7 +44,7 @@ export default function MyAccount() {
     <main className="area-page account">
       <PageHeader
         title="My account"
-        description={me && <>Logged in as <strong>{me.name}</strong> ({me.username}), {me.is_admin ? `${me.role} and admin` : me.role}.</>}
+        description={me && <>Logged in as <strong>{me.name}</strong>{me.name !== me.username && ` (${me.username})`}, {me.is_admin ? `${me.role} and admin` : me.role}.</>}
       />
       {error && <p className="error" role="alert">{error}</p>}
       {changed && (

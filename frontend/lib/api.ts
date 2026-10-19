@@ -92,6 +92,7 @@ export type Me = {
   is_admin: boolean;
   can_teach: boolean;         // teacher or admin. Only decides which links are shown: the server checks every request.
   gpu_enabled: boolean;
+  gpu_notebooks: boolean;     // false while GPU notebooks are turned off for the whole platform (api/app/config.py)
   theme: string;              // how the site looks for this account (lib/themes.ts)
 };
 
