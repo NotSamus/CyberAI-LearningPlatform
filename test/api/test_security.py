@@ -157,7 +157,7 @@ def test_cookie_is_https_only_in_production(client, db, monkeypatch):
 
 def test_admin_api_is_enforced_on_the_server(client, db):
     auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
-    auth.create_user(db, "maria", PASSWORD, display_name="Maria Lopez")
+    auth.create_user(db, "maria", PASSWORD)
 
     assert client.get("/api/admin/users").status_code == 401     # logged out
 
@@ -195,7 +195,7 @@ def test_losing_admin_rights_takes_effect_immediately(client, db):
 def test_admin_creates_a_student_account(client, db):
     auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
     auth.create_user(db, "maria", PASSWORD)
-    new = {"username": "Jose.Perez", "name": "Jose Perez", "role": "student", "gpu_enabled": True}
+    new = {"username": "Jose.Perez", "role": "student", "gpu_enabled": True}
 
     assert client.post("/api/admin/users", json=new).status_code == 401          # logged out
     login(client, "maria")
@@ -208,7 +208,7 @@ def test_admin_creates_a_student_account(client, db):
     r = client.post("/api/admin/users", json={**new, "is_admin": True, "password": "chosen by the caller"})
     assert r.status_code == 201
     account = r.json()
-    assert (account["username"], account["name"], account["role"], account["gpu_enabled"]) == ("jose.perez", "Jose Perez", "student", True)
+    assert (account["username"], account["name"], account["role"], account["gpu_enabled"]) == ("jose.perez", "jose.perez", "student", True)
     assert account["is_admin"] is False                          # admin rights cannot be handed out from the browser
     password = account["password"]
     assert password != "chosen by the caller" and len(password) >= 12   # generated on the server
@@ -310,7 +310,7 @@ def no_hub(monkeypatch):
 
 def test_admin_edits_resets_and_removes_accounts(client, db, no_hub):
     auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
-    auth.create_user(db, "maria", PASSWORD, display_name="Maria Lopez")
+    auth.create_user(db, "maria", PASSWORD)
     auth.create_user(db, "chief", PASSWORD, role="teacher", is_admin=True)
     maria = TestClient(app)
     login(maria, "maria")
@@ -324,9 +324,9 @@ def test_admin_edits_resets_and_removes_accounts(client, db, no_hub):
     assert no_hub == [] and db.scalar(select(func.count()).select_from(User)) == 3
 
     login(client, "boss")
-    r = client.patch("/api/admin/users/2", json={"name": "Maria L. Lopez", "gpu_enabled": True, "role": "teacher", "is_admin": True})
+    r = client.patch("/api/admin/users/2", json={"gpu_enabled": True, "role": "teacher", "is_admin": True})
     account = r.json()
-    assert (account["name"], account["gpu_enabled"]) == ("Maria L. Lopez", True)
+    assert (account["name"], account["gpu_enabled"]) == ("maria", True)      # a student has no name to change
     assert (account["role"], account["is_admin"]) == ("student", False)      # neither can be changed from the browser
     assert client.patch("/api/admin/users/2", json={"name": ""}).status_code == 422
     assert client.patch("/api/admin/users/99", json={"name": "x"}).status_code == 404

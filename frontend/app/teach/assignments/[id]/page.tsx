@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Chip from "@/components/Chip";
 import EmptyState from "@/components/EmptyState";
+import Person from "@/components/Person";
 import { Label, points, submissionLabel, type Standing } from "@/components/Status";
 import { useAssignmentPage } from "@/components/teach/context";
 import { api, type Launch, type StudentProgress, type Submission } from "@/lib/api";
@@ -163,7 +164,7 @@ function Row({ student, autograded, outOf, next, open, onToggle, onOpen, downloa
   return (
     <>
       <tr>
-        <td><span className="person"><strong>{student.name}</strong><span className="muted">{student.username}</span></span></td>
+        <td><Person name={student.name} username={student.username} /></td>
         {/* When it was handed in; before that, when it was opened (one column less, so that the
             buttons at the end fit on an iPad held upright) */}
         <td className="when">

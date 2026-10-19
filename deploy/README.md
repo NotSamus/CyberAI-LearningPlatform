@@ -70,6 +70,14 @@ backend also refuses to start when `PLATFORM_HUB_API_TOKEN`, `OAUTH_CLIENT_SECRE
 shorter than 32 characters, contains `dev-` or is still `change-me` (`api/app/config.py`): generate them
 with `openssl rand -hex 32`.
 
+### GPU notebooks (turned off for now)
+
+`GPU_NOTEBOOKS` in `deploy/.env` turns GPU notebooks on or off for everyone; it is `off` when not set,
+and stays off until they are taken up again. Both the backend and the hub read it: while it is off,
+assignments that need a GPU open in the standard (CPU) environment and the hub starts no GPU server.
+To turn them on, set `GPU_NOTEBOOKS=on` and run `docker compose up -d --build` (the hub's settings are
+built into its image). Nothing else changes: who may use GPUs and which assignments need one are kept.
+
 ### The grading service
 
 `grader` runs Otter-Grader for autograded assignments. Student code is executed there, so it is kept
@@ -138,7 +146,8 @@ More account commands (same tool, `api/app/manage.py`):
 ```bash
 docker compose exec backend python -m app.manage set-admin maria          # or: set-admin maria --remove
 docker compose exec backend python -m app.manage set-password maria       # choose a password; logs the account out everywhere
-docker compose exec backend python -m app.manage create-user maria --name "Maria Lopez"   # same as Add account in the site
+docker compose exec backend python -m app.manage create-user --random                    # a student, with a made-up username it prints
+docker compose exec backend python -m app.manage create-user msmith --role teacher --name "Mary Smith"   # same as Add account in the site
 docker compose exec backend python -m app.manage list-users
 ```
 

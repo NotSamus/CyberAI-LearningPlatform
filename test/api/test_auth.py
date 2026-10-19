@@ -1,5 +1,6 @@
 """Accounts, login and the account command line tool, on a real (throwaway) Postgres database."""
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -37,7 +38,7 @@ def manage(*args: str, db_url: str, password: str = ""):
 
 
 def test_login_me_logout(client, db):
-    user = auth.create_user(db, "Maria", PASSWORD, display_name="Maria Lopez")
+    user = auth.create_user(db, "Maria", PASSWORD)
     assert client.get("/api/me").status_code == 401
     assert login(client, "maria", "not her password").status_code == 401
     assert login(client, "nobody").status_code == 401
@@ -46,8 +47,8 @@ def test_login_me_logout(client, db):
     assert r.status_code == 200
     assert "httponly" in r.headers["set-cookie"].lower() and "samesite=lax" in r.headers["set-cookie"].lower()
     assert client.get("/api/me").json() == {
-        "id": user.id, "username": "maria", "name": "Maria Lopez", "role": "student", "is_admin": False, "can_teach": False, "gpu_enabled": False,
-        "theme": "standard",
+        "id": user.id, "username": "maria", "name": "maria", "role": "student", "is_admin": False, "can_teach": False, "gpu_enabled": False,
+        "gpu_notebooks": False, "theme": "standard",               # GPU notebooks are turned off for now
     }
 
     cookie = client.cookies[auth.COOKIE_NAME]
@@ -121,7 +122,9 @@ def test_command_line_tool(client, db, migrated_db_url):
     weak = manage("create-user", "maria", db_url=migrated_db_url, password="short")
     assert weak.returncode != 0 and "characters" in weak.stderr
 
-    assert manage("create-user", "maria", "--name", "Maria Lopez", db_url=migrated_db_url, password=PASSWORD).returncode == 0
+    named = manage("create-user", "maria", "--name", "Maria Lopez", db_url=migrated_db_url, password=PASSWORD)
+    assert named.returncode != 0 and "only a username" in named.stderr       # students have no name
+    assert manage("create-user", "maria", db_url=migrated_db_url, password=PASSWORD).returncode == 0
     assert manage("set-admin", "maria", db_url=migrated_db_url).returncode == 0
     assert "maria (id 2; student, admin)" in manage("list-users", db_url=migrated_db_url).stdout
     assert manage("set-admin", "maria", "--remove", db_url=migrated_db_url).returncode == 0
@@ -131,3 +134,14 @@ def test_command_line_tool(client, db, migrated_db_url):
     assert login(client, "maria").status_code == 401
     assert login(client, "maria", "a brand new password").status_code == 200
     assert manage("set-admin", "nobody", db_url=migrated_db_url).returncode != 0
+
+    # A made-up username, like the dice in Admin > Accounts; a teacher may have a name.
+    made = manage("create-user", "--random", "--gpu", db_url=migrated_db_url, password=PASSWORD)
+    username = re.fullmatch(r"Created ([a-z]+[0-9]{2,4}) \(id 3; student, gpu\)\n", made.stdout)
+    assert username, made.stdout + made.stderr
+    assert login(client, username.group(1)).status_code == 200 and client.get("/api/me").json()["name"] == username.group(1)
+    for neither_or_both in (["create-user"], ["create-user", "jose", "--random"]):
+        refused = manage(*neither_or_both, db_url=migrated_db_url, password=PASSWORD)
+        assert refused.returncode != 0 and "Give a username, or --random" in refused.stderr
+    assert manage("create-user", "mrsmith", "--role", "teacher", "--name", "Mr Smith", db_url=migrated_db_url, password=PASSWORD).returncode == 0
+    assert login(client, "mrsmith").status_code == 200 and client.get("/api/me").json()["name"] == "Mr Smith"

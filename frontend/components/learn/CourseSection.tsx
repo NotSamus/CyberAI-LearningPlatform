@@ -11,8 +11,9 @@ function count(n: number, one: string, many: string): string {
 
 // Everything of one course on Home: its name and size, how far the student is in it, then every
 // lesson (in the teachers' order) and every assignment with where it stands. For a teacher
-// (`asTeacher`) their own progress means nothing: they see drafts marked instead.
-export default function CourseSection({ group, asTeacher }: { group: CourseGroup; asTeacher: boolean }) {
+// (`asTeacher`) their own progress means nothing: they see drafts marked instead. "GPU" is shown only
+// while GPU notebooks are on (`gpuOn`): otherwise those assignments open in the standard environment.
+export default function CourseSection({ group, asTeacher, gpuOn }: { group: CourseGroup; asTeacher: boolean; gpuOn: boolean }) {
   const { lessons, assignments } = group;
   // Done: lessons completed and assignments handed in, together.
   const done = lessons.filter((lesson) => lesson.completed_at).length + assignments.filter((a) => a.submission).length;
@@ -59,10 +60,10 @@ export default function CourseSection({ group, asTeacher }: { group: CourseGroup
             <div className="grow">
               <Link href={`/assignments/${a.id}`} className="title">{a.title}</Link>
               {a.description && <span className="summary clamp-2">{a.description}</span>}
-              {(a.due_at || a.requires_gpu) && (
+              {(a.due_at || (a.requires_gpu && gpuOn)) && (
                 <p className="meta">
                   <DueDate due_at={a.due_at} done={Boolean(a.submission)} />
-                  {a.requires_gpu && <span className="fact"><Cpu aria-hidden />GPU</span>}
+                  {a.requires_gpu && gpuOn && <span className="fact"><Cpu aria-hidden />GPU</span>}
                 </p>
               )}
             </div>

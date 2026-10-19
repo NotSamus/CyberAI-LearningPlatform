@@ -1,7 +1,8 @@
 # cyberAI-Platform
 
 Student coding platform: **FastAPI + uvicorn** backend in `api/` (conda env `CyberP`), **Next.js + TypeScript** frontend,
-and **JupyterHub** for per-student notebook environments (CPU and GPU).
+and **JupyterHub** for per-student notebook environments (CPU and GPU; GPU notebooks are turned off
+for now, see "GPU notebooks: turned off for now" below).
 Design and server setup: see the "Student Jupyter Platform: Architecture & Setup" doc and `deploy/README.md`.
 
 ## Project structure
@@ -110,8 +111,14 @@ After that, an admin manages accounts in the site, under **Admin** (top bar) > *
 
 - **Add account**: the server generates the password and shows it once, in a box that stays open until
   the admin presses "I have noted it".
-- **Edit**: the name and whether the account may use GPU notebooks. The username and the role are fixed
-  (the account's notebook files are stored under a name made from its role and number).
+- **Students have no name, only a username.** The form asks a teacher's name, never a student's, and the
+  server refuses one (a student's name on the site is their username). For a student the username is
+  filled in with a made-up one in the style of an Xbox gamertag, like `swiftfalcon482`; the dice beside
+  it makes up another, and it can still be typed over. They are made on the server
+  (`GET /api/admin/username-suggestion`, `api/app/usernames.py`), never one that is taken, from word
+  lists checked so that no pairing spells anything rude.
+- **Edit**: a teacher's name, and whether the account may use GPU notebooks. The username and the role
+  are fixed (the account's notebook files are stored under a name made from its role and number).
 - **New password** (in the row's ⋯ menu), for someone who forgot theirs: again generated and shown once,
   and the account is logged out everywhere.
 - **Remove** (in the ⋯ menu): deletes the account with its submissions and grades, stops its notebook servers and ends
@@ -126,11 +133,12 @@ admin's password or remove an admin. That needs access to the server itself, wit
 ```bash
 python -m app.manage set-admin maria                               # or: set-admin maria --remove
 python -m app.manage set-password maria                            # choose a password yourself; also logs that account out everywhere
-python -m app.manage create-user maria --name "Maria Lopez"        # same as the form; add --gpu for GPU notebooks
+python -m app.manage create-user --random                          # a student with a made-up username; add --gpu for GPU notebooks
+python -m app.manage create-user msmith --role teacher --name "Mary Smith"   # --name is refused for students
 python -m app.manage list-users
 ```
 
-Roles are `student` and `teacher` (teachers get GPU notebooks and are JupyterHub admins). `--admin` is
+Roles are `student` and `teacher` (teachers may use GPU notebooks and are JupyterHub admins). `--admin` is
 separate: it marks who may manage accounts. Usernames are not case sensitive. Passwords are stored only
 as Argon2 hashes. A login lasts 7 days. Logging out ends it on the server and also logs the browser out
 of JupyterHub.
@@ -357,6 +365,23 @@ editing the same lesson at once overwrite each other; code is coloured where it 
 written in the editor, and Markdown has no math formulas yet. Locally the "GPU" profile is simulated: same
 checks, no GPU attached, and it uses the CPU image, so `import torch` fails unless you pass
 `GPU_IMAGE=... ./dev-hub.sh`.
+
+## GPU notebooks: turned off for now
+
+GPU notebooks are off for the whole platform until they are taken up again. One setting,
+`GPU_NOTEBOOKS` (`off` by default, `on` to turn them back on), read by the backend (`api/app/config.py`)
+and by the hub (`deploy/jupyterhub/jupyterhub_config.py`):
+
+- An assignment marked "Needs a GPU" opens, is submitted and stopped in the standard environment. The
+  CPU and GPU servers share one home directory, so a student's file is the same one when GPUs are back.
+- The hub refuses to start a GPU server for anyone ("GPU notebooks are turned off for now."), also when
+  it is asked directly, without going through the platform.
+- Nothing is lost: "GPU notebooks" on an account and "Needs a GPU" on an assignment can still be set, and
+  are shown with "turned off for now"; students do not see "GPU" on those assignments meanwhile.
+- Grading is unchanged: GPU assignments were already graded in the GPU image without a GPU.
+
+To turn them back on: `GPU_NOTEBOOKS=on ./dev.sh` locally, or `GPU_NOTEBOOKS=on` in `deploy/.env` on
+the server, then `docker compose up -d --build` (the hub's config is built into its image).
 
 ## How it looks
 

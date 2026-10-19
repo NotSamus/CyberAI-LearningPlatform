@@ -8,6 +8,7 @@ import { useAssignmentPage } from "@/components/teach/context";
 import { api, type Course, type ManagedAssignment, type Student } from "@/lib/api";
 import { fromLocalInput, toLocalInput } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
+import { useMe } from "@/lib/useMe";
 
 // An assignment's settings: what it is, who gets it and when it is due, its files, and deleting it.
 // `?new=1`: it was just uploaded, and still has to be given to students and published.
@@ -123,6 +124,7 @@ function EditAssignment({ assignment, students, courses, onSave, outcome }: {
   const [description, setDescription] = useState(assignment.description);
   const [due, setDue] = useState(toLocalInput(assignment.due_at));
   const [gpu, setGpu] = useState(assignment.requires_gpu);
+  const gpuOff = useMe()?.gpu_notebooks === false;       // GPU notebooks turned off for the platform
   const [pointsText, setPointsText] = useState(assignment.points === null ? "" : String(assignment.points));
   const [audience, setAudience] = useState<Audience>(
     assignment.for_everyone ? "everyone" : assignment.course_id !== null ? "course" : "chosen",
@@ -168,7 +170,7 @@ function EditAssignment({ assignment, students, courses, onSave, outcome }: {
       )}
       <label className="check">
         <input type="checkbox" checked={gpu} onChange={(e) => setGpu(e.target.checked)} />
-        Needs a GPU
+        Needs a GPU{gpuOff && <span className="muted"> (turned off for now: it opens in the standard environment)</span>}
       </label>
 
       <fieldset className="full">

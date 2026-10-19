@@ -276,10 +276,10 @@ def test_the_teacher_sees_how_a_lesson_went(people, db):
     ]
     jose_row, maria_row = progress["students"]
     assert jose_row == {
-        "id": 3, "username": "jose", "name": "Jose Perez", "opened_at": None, "completed_at": None,
+        "id": 3, "username": "jose", "name": "jose", "opened_at": None, "completed_at": None,
         "answered": 1, "correct": 0, "first_try": 0, "missed": 1,
     }
-    assert (maria_row["name"], maria_row["answered"], maria_row["correct"], maria_row["first_try"], maria_row["missed"]) == ("Maria Lopez", 2, 2, 1, 0)
+    assert (maria_row["name"], maria_row["answered"], maria_row["correct"], maria_row["first_try"], maria_row["missed"]) == ("maria", 2, 2, 1, 0)
     assert maria_row["opened_at"] is not None and maria_row["completed_at"] is not None
     assert teacher.get("/api/teach/lessons/9/progress").status_code == 404
 

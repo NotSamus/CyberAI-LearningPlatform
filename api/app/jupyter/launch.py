@@ -35,7 +35,9 @@ def visible_assignment(
 
 
 def _server_for(assignment: Assignment) -> str:
-    return "gpu" if assignment.requires_gpu else "cpu"
+    # While GPU notebooks are off, a GPU assignment opens in the standard environment. Both servers
+    # share one home directory, so the student's file is the same one when GPUs are back.
+    return "gpu" if assignment.requires_gpu and config.GPU_NOTEBOOKS else "cpu"
 
 
 @router.get("/me")
@@ -48,6 +50,7 @@ async def me(user: PlatformUser = Depends(require_user)):
         "is_admin": user.is_admin,
         "can_teach": user.can_teach,
         "gpu_enabled": "gpu" in user.hub_groups,
+        "gpu_notebooks": config.GPU_NOTEBOOKS,     # GPU notebooks are on for the platform (config.py)
         "theme": user.theme,
     }
 

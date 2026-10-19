@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
+import Person from "@/components/Person";
 import ProgressBar from "@/components/ProgressBar";
 import { Label, publishLabel } from "@/components/Status";
 import LessonTabs from "@/components/teach/LessonTabs";
@@ -87,7 +88,7 @@ export default function LessonProgressPage({ params }: { params: Promise<{ id: s
             <tbody>
               {students.map((s) => (
                 <tr key={s.id}>
-                  <td><span className="person"><strong>{s.name}</strong><span className="muted">{s.username}</span></span></td>
+                  <td><Person name={s.name} username={s.username} /></td>
                   <td>{s.opened_at ? formatWhen(s.opened_at) : <span className="muted">Not yet</span>}</td>
                   <td>{s.completed_at ? formatWhen(s.completed_at) : <span className="muted">Not yet</span>}</td>
                   <td className="num">{s.answered} of {questions.length}</td>

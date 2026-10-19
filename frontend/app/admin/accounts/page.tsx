@@ -1,10 +1,11 @@
 "use client";
-import { Cpu, GraduationCap, KeyRound, School, Shield, Trash2, UserPlus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Cpu, Dices, GraduationCap, KeyRound, School, Shield, Trash2, UserPlus } from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
 import Chip from "@/components/Chip";
 import Dialog from "@/components/Dialog";
 import Menu from "@/components/Menu";
 import PageHeader from "@/components/PageHeader";
+import Person from "@/components/Person";
 import { api, type Account, type NewAccount } from "@/lib/api";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import { useMe } from "@/lib/useMe";
@@ -82,7 +83,7 @@ export default function AccountsPage() {
               return (
                 <tr key={a.id}>
                   <td className="wrap">
-                    <span className="person"><strong>{a.name}</strong><span className="muted">{a.username}</span></span>
+                    <Person name={a.name} username={a.username} />
                   </td>
                   <td>
                     <span className="badges">
@@ -160,12 +161,46 @@ function PasswordDialog({ shown, onDone }: { shown: Shown | null; onDone: () => 
 }
 
 function AddAccountDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (account: NewAccount) => void }) {
-  const [username, setUsername] = useState("");
-  const [name, setName] = useState("");
+  // Dialog shows its contents only while open, so the form starts afresh, with a new suggestion, each time.
+  return (
+    <Dialog open={open} title="Add account" onClose={onClose}>
+      <AddAccountForm onClose={onClose} onCreated={onCreated} />
+    </Dialog>
+  );
+}
+
+// Students have a username and no name: the name is asked for teachers only. A student's username
+// is made up on the server, like "swiftfalcon482" (the dice asks for another one); the admin can
+// still type their own.
+function AddAccountForm({ onClose, onCreated }: { onClose: () => void; onCreated: (account: NewAccount) => void }) {
   const [role, setRole] = useState("student");
+  const [username, setUsername] = useState("");
+  const [typed, setTyped] = useState(false);          // the admin typed the username themself
+  const [name, setName] = useState("");
   const [gpu, setGpu] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const teacher = role === "teacher";
+  const gpuOff = useMe()?.gpu_notebooks === false;       // GPU notebooks turned off for the platform: the choice is kept
+  const field = useId();
+
+  // `replace`: the dice was pressed. Otherwise a username the admin has started typing is kept.
+  const suggest = useCallback(async (replace: boolean) => {
+    try {
+      const made = (await api<{ username: string }>("/admin/username-suggestion")).username;
+      setUsername((current) => (replace || !current ? made : current));
+      if (replace) setTyped(false);
+    } catch (e) {
+      setError(message(e));
+    }
+  }, []);
+  useEffect(() => { suggest(false); }, [suggest]);
+
+  function chooseRole(next: string) {
+    setRole(next);
+    if (next === "teacher" && !typed) setUsername("");      // a made-up username is for students; a teacher's is usually their own
+    if (next === "student" && !username) suggest(false);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -173,53 +208,65 @@ function AddAccountDialog({ open, onClose, onCreated }: { open: boolean; onClose
     setError("");
     try {
       const account = await api<NewAccount>("/admin/users", {
-        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ username, name, role, gpu_enabled: gpu }),
+        method: "POST", headers: JSON_HEADERS,
+        body: JSON.stringify({ username, role, gpu_enabled: gpu, ...(teacher ? { name } : {}) }),
       });
-      setUsername("");
-      setName("");
-      setGpu(false);
       onCreated(account);
     } catch (e) {
       setError(message(e));
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   return (
-    <Dialog open={open} title="Add account" onClose={onClose}>
-      <form onSubmit={submit}>
-        <div className="dialog-body">
-          <label>
-            Username
-            <input name="new-username" autoComplete="off" autoCapitalize="none" autoFocus required
-              value={username} onChange={(e) => setUsername(e.target.value)} />
-          </label>
+    <form onSubmit={submit}>
+      <div className="dialog-body">
+        <label>
+          Role
+          <select value={role} onChange={(e) => chooseRole(e.target.value)}>
+            <option value="student">Student</option>
+            <option value="teacher">Teacher</option>
+          </select>
+        </label>
+        {/* The dice is beside the field, not in its label, so that the field is read out as "Username" only */}
+        <div className="field">
+          <label htmlFor={field}>Username</label>
+          <span className="row">
+            <input id={field} name="new-username" className="grow" autoComplete="off" autoCapitalize="none" autoFocus required
+              value={username} onChange={(e) => { setUsername(e.target.value); setTyped(true); }} />
+            <button type="button" className="icon" aria-label="Make up another username" title="Make up another username"
+              onClick={() => suggest(true)}><Dices aria-hidden /></button>
+          </span>
+        </div>
+        {teacher && (
           <label>
             Full name
-            <input name="new-name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+            <input name="new-name" autoComplete="off" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          <label>
-            Role
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
-            </select>
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={gpu || role === "teacher"} disabled={role === "teacher"}
-              onChange={(e) => setGpu(e.target.checked)} />
-            GPU notebooks{role === "teacher" && <span className="muted"> (teachers always have them)</span>}
-          </label>
-          <p className="muted">The server makes a password for the account and shows it to you once.</p>
-          {error && <p className="error" role="alert">{error}</p>}
-        </div>
-        <div className="dialog-foot">
-          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
-          <button type="submit" disabled={busy}>{busy ? "Creating…" : "Create account"}</button>
-        </div>
-      </form>
-    </Dialog>
+        )}
+        <label className="check">
+          <input type="checkbox" checked={gpu || teacher} disabled={teacher} onChange={(e) => setGpu(e.target.checked)} />
+          GPU notebooks<GpuAside teacher={teacher} off={gpuOff} />
+        </label>
+        <p className="muted">
+          {!teacher && "Students have no name here, only a username. "}
+          The server makes a password for the account and shows it to you once.
+        </p>
+        {error && <p className="error" role="alert">{error}</p>}
+      </div>
+      <div className="dialog-foot">
+        <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+        <button type="submit" disabled={busy}>{busy ? "Creating…" : "Create account"}</button>
+      </div>
+    </form>
   );
+}
+
+// Beside "GPU notebooks": teachers always have them, and while they are turned off for the platform
+// the choice is still saved, for when they are back.
+function GpuAside({ teacher, off }: { teacher: boolean; off: boolean }) {
+  const aside = [teacher && "teachers always have them", off && "turned off for now"].filter(Boolean).join("; ");
+  return aside ? <span className="muted"> ({aside})</span> : null;
 }
 
 function EditAccountDialog({ account, onClose, onSaved }: { account: Account; onClose: () => void; onSaved: () => void }) {
@@ -227,14 +274,16 @@ function EditAccountDialog({ account, onClose, onSaved }: { account: Account; on
   const [gpu, setGpu] = useState(account.gpu_enabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const teacher = account.role === "teacher";       // teachers always have GPU notebooks
+  const teacher = account.role === "teacher";       // only teachers have a name, and they always have GPU notebooks
+  const gpuOff = useMe()?.gpu_notebooks === false;       // GPU notebooks turned off for the platform: the choice is kept
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await api(`/admin/users/${account.id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ name, gpu_enabled: gpu }) });
+      const changes = teacher ? { name, gpu_enabled: gpu } : { gpu_enabled: gpu };      // students have no name
+      await api(`/admin/users/${account.id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(changes) });
       onSaved();
     } catch (e) {
       setError(message(e));
@@ -246,20 +295,22 @@ function EditAccountDialog({ account, onClose, onSaved }: { account: Account; on
     <Dialog open title={`Edit ${account.username}`} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="dialog-body">
-          <label>
-            Name
-            <input required autoFocus maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
+          {teacher && (
+            <label>
+              Name
+              <input required autoFocus maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+          )}
           <label className="check">
             <input type="checkbox" checked={gpu || teacher} disabled={teacher} onChange={(e) => setGpu(e.target.checked)} />
-            GPU notebooks{teacher && <span className="muted"> (teachers always have them)</span>}
+            GPU notebooks<GpuAside teacher={teacher} off={gpuOff} />
           </label>
           <p className="muted">The username ({account.username}) and the role cannot be changed.</p>
           {error && <p className="error" role="alert">{error}</p>}
         </div>
         <div className="dialog-foot">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
-          <button type="submit" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Save"}</button>
+          <button type="submit" disabled={busy || (teacher && !name.trim())}>{busy ? "Saving…" : "Save"}</button>
         </div>
       </form>
     </Dialog>

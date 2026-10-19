@@ -106,7 +106,7 @@ def test_students_cannot_manage_courses_or_announcements(people, db):
 
 def test_who_has_opened_an_assignment(people, hub, db):
     teacher, maria, jose = people
-    auth.create_user(db, "ana", PASSWORD, display_name="Ana Ruiz")      # id 4, not given the assignment
+    auth.create_user(db, "ana", PASSWORD)          # id 4, not given the assignment
     upload(teacher, "Loops")
     teacher.patch("/api/teach/assignments/1", json={"student_ids": [2, 3], "published": True})
 
@@ -120,11 +120,11 @@ def test_who_has_opened_an_assignment(people, hub, db):
 
     progress = teacher.get("/api/teach/assignments/1/progress").json()
     assert progress["assignment"]["title"] == "Loops"
-    assert [(s["name"], s["opened_at"]) for s in progress["students"]] == [("Jose Perez", None), ("Maria Lopez", first)]
+    assert [(s["name"], s["opened_at"]) for s in progress["students"]] == [("jose", None), ("maria", first)]
 
     # Given to everyone: every student is listed, the teacher who tried it out is not.
     teacher.post("/api/assignments/1/launch")
     teacher.patch("/api/teach/assignments/1", json={"for_everyone": True})
     names = [s["name"] for s in teacher.get("/api/teach/assignments/1/progress").json()["students"]]
-    assert names == ["Ana Ruiz", "Jose Perez", "Maria Lopez"]
+    assert names == ["ana", "jose", "maria"]
     assert teacher.get("/api/teach/assignments/9/progress").status_code == 404

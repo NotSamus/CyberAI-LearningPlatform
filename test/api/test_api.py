@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app import assignments, auth
+from app import assignments, auth, config
 from app.db import get_db
 from app.jupyter import hub_client
 from app.jupyter.deps import PlatformUser, get_current_user_optional
@@ -79,13 +79,34 @@ def test_database_down_is_reported(monkeypatch):
     assert r.status_code == 503 and "database is not reachable" in r.json()["detail"]
 
 
-def test_launch_cpu_and_gpu(fake_hub, two_assignments):
+def test_launch_cpu_and_gpu(fake_hub, two_assignments, monkeypatch):
+    monkeypatch.setattr(config, "GPU_NOTEBOOKS", True)          # GPU notebooks turned on (GPU_NOTEBOOKS=on)
     r = client.post("/api/assignments/1/launch").json()
     assert r["profile"] == "cpu"
     assert r["url"] == "http://localhost:8081/user/s-1/cpu/lab/tree/assignments/python-basics-1/lab1.ipynb"
     r = client.post("/api/assignments/2/launch").json()
     assert r["profile"] == "gpu"
     assert ("start", "s-1", "gpu") in fake_hub
+    assert client.get("/api/me").json()["gpu_notebooks"] is True
+
+
+def test_gpu_notebooks_turned_off(fake_hub, two_assignments, monkeypatch):
+    """Off, as for now (the default): a GPU assignment opens and is stopped in the standard
+    environment, so no GPU server is ever started. Who may use GPUs is kept for later."""
+    monkeypatch.setattr(config, "GPU_NOTEBOOKS", False)
+
+    async def stop_server(username, server):
+        fake_hub.append(("stop", username, server))
+
+    monkeypatch.setattr(hub_client, "stop_server", stop_server)
+    r = client.post("/api/assignments/2/launch").json()
+    assert r["profile"] == "cpu"
+    assert r["url"] == "http://localhost:8081/user/s-1/cpu/lab/tree/assignments/hello-gpu-2/lab1.ipynb"
+    assert client.post("/api/assignments/2/stop").json() == {"stopped": True}
+    assert [call[2] for call in fake_hub if call[0] in ("start", "stop")] == ["cpu", "cpu"]
+    me = client.get("/api/me").json()
+    assert me["gpu_notebooks"] is False and me["gpu_enabled"] is True
+    assert client.get("/api/assignments/2").json()["requires_gpu"] is True       # the assignment's setting is kept
 
 
 def test_environment_still_starting(monkeypatch, fake_hub, two_assignments):

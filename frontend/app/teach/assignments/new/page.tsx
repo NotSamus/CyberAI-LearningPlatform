@@ -7,6 +7,7 @@ import FileDrop from "@/components/teach/FileDrop";
 import { api, type Course, type ManagedAssignment } from "@/lib/api";
 import { fromLocalInput } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
+import { useMe } from "@/lib/useMe";
 
 const MAX_NOTEBOOK_BYTES = 10 * 1024 * 1024;    // same as MAX_NOTEBOOK_BYTES in api/app/assignments.py
 
@@ -22,6 +23,7 @@ export default function NewAssignmentPage({ searchParams }: { searchParams: Prom
   const [description, setDescription] = useState("");
   const [due, setDue] = useState("");
   const [gpu, setGpu] = useState(false);
+  const gpuOff = useMe()?.gpu_notebooks === false;       // GPU notebooks turned off for the platform
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -89,7 +91,7 @@ export default function NewAssignmentPage({ searchParams }: { searchParams: Prom
         </label>
         <label className="check">
           <input type="checkbox" checked={gpu} onChange={(e) => setGpu(e.target.checked)} />
-          Needs a GPU
+          Needs a GPU{gpuOff && <span className="muted"> (turned off for now: it opens in the standard environment)</span>}
         </label>
         <label className="full">
           Description (what students should do)

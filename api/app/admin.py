@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import auth
+from app import auth, usernames
 from app.db import get_db
 from app.jupyter import hub_client
 from app.jupyter.deps import PlatformUser, get_current_user_optional
@@ -59,9 +59,16 @@ def list_users(admin: PlatformUser = Depends(require_admin), db: Session = Depen
     return [_account(user) for user in db.scalars(select(User).order_by(User.username))]
 
 
+@router.get("/username-suggestion")
+def username_suggestion(admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db)):
+    """A made-up username nobody has yet, like "swiftfalcon482" (app/usernames.py), for the Add
+    account form. Students have no name on the platform, so their username need not be made from it."""
+    return {"username": usernames.suggest(db)}
+
+
 class NewAccount(BaseModel):
     username: str = Field(max_length=64)
-    name: str = Field("", max_length=100)
+    name: str = Field("", max_length=100)       # teachers only: students have a username and no name
     role: str = "student"
     gpu_enabled: bool = False
 
@@ -84,7 +91,7 @@ def create_user(body: NewAccount, admin: PlatformUser = Depends(require_admin), 
 class AccountChanges(BaseModel):
     """Only the fields that are sent are changed. The username and the role stay as they are: the
     account's notebook files are stored under a name made from its role and number."""
-    name: str | None = Field(None, min_length=1, max_length=100)
+    name: str | None = Field(None, min_length=1, max_length=100)       # teachers only
     gpu_enabled: bool | None = None
 
 
@@ -92,6 +99,10 @@ class AccountChanges(BaseModel):
 def change_user(user_id: int, body: AccountChanges, admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db)):
     user = _user_or_404(db, user_id)
     if body.name is not None:
+        try:
+            auth.check_name(user.role, body.name)
+        except auth.AccountError as e:
+            raise HTTPException(400, str(e))
         user.display_name = body.name.strip() or user.username
     if body.gpu_enabled is not None:
         user.gpu_enabled = body.gpu_enabled

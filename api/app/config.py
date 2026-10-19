@@ -19,6 +19,11 @@ GRADER_TOKEN = os.environ.get("GRADER_TOKEN", "dev-grader-token")
 # Local dev: the Postgres container from deploy/docker-compose.dev.yml (./dev.sh starts it).
 # Production: the URL set in deploy/docker-compose.yml.
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://platform:dev-db-password@localhost:5433/platform")
+# GPU notebooks, on or off for the whole platform. Off (the default) until they are taken up again:
+# assignments that need a GPU open in the standard environment, and the hub refuses to start a GPU
+# server (deploy/jupyterhub/jupyterhub_config.py reads the same variable). Who may use GPUs, and
+# which assignments need one, are still stored and can still be changed.
+GPU_NOTEBOOKS = os.environ.get("GPU_NOTEBOOKS", "off") == "on"
 
 # Whether the site is served over HTTPS (production, behind Caddy). Plain http is local development,
 # on this computer or, with `./dev.sh --lan`, for other devices on the same network.

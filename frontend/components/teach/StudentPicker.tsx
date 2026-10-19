@@ -42,7 +42,7 @@ export default function StudentPicker({ students, chosen, onChange }: {
             {shown.map((s) => (
               <label key={s.id} className="check">
                 <input type="checkbox" checked={chosen.includes(s.id)} onChange={() => toggle(s.id)} />
-                <span>{s.name} <span className="muted">({s.username})</span></span>
+                <span>{s.name}{s.name !== s.username && <> <span className="muted">({s.username})</span></>}</span>
               </label>
             ))}
           </div>
