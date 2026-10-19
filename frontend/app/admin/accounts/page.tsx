@@ -21,6 +21,7 @@ export default function AccountsPage() {
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
+  const [resetting, setResetting] = useState<Account | null>(null);   // another admin, whose new password needs yours first
   const [shown, setShown] = useState<Shown | null>(null);      // kept only in this page's memory, never in the address
   const [rights, setRights] = useState<Account | null>(null);   // a teacher being made an admin, or an admin losing that
 
@@ -30,6 +31,10 @@ export default function AccountsPage() {
   useEffect(load, [load]);
 
   async function resetPassword(a: Account) {
+    if (a.is_admin) {
+      setResetting(a);
+      return;
+    }
     const sure = window.confirm(`Give ${a.name} (${a.username}) a new password? They are logged out everywhere, and their current password stops working.`);
     if (!sure) return;
     setError("");
@@ -105,7 +110,7 @@ export default function AccountsPage() {
                       <Menu
                         label={`More for ${a.username}`}
                         items={[
-                          { label: "New password", icon: KeyRound, disabled: a.is_admin, onSelect: () => resetPassword(a) },
+                          { label: "New password", icon: KeyRound, disabled: a.id === me?.id, onSelect: () => resetPassword(a) },
                           ...(a.role === "teacher" && !a.is_admin ? [{ label: "Make admin", icon: ShieldPlus, onSelect: () => setRights(a) }] : []),
                           ...(a.is_admin ? [{ label: "Remove admin rights", icon: ShieldMinus, disabled: a.id === me?.id, onSelect: () => setRights(a) }] : []),
                           { label: "Remove", icon: Trash2, danger: true, disabled: a.is_admin || a.id === me?.id, onSelect: () => remove(a) },
@@ -120,10 +125,10 @@ export default function AccountsPage() {
         </table>
       </div>
       <p className="muted hint">
-        “Notebook user” is the name that account has in the JupyterHub section. Making a teacher an admin, and taking
-        admin rights away, are in the ⋯ menu and ask for your own password first; your own rights stay. An admin’s new
-        password is only set on the server, with the command line tool, and an admin is removed once their admin rights
-        are gone. You cannot remove your own account.
+        “Notebook user” is the name that account has in the JupyterHub section. A new password for another admin
+        asks for your own password first; yours is changed under My account. Making a teacher an admin, and taking
+        admin rights away, are in the ⋯ menu and ask for your own password too; your own rights stay. An admin is
+        removed once their admin rights are gone. You cannot remove your own account.
       </p>
 
       <AddAccountDialog
@@ -134,6 +139,12 @@ export default function AccountsPage() {
         <EditAccountDialog
           account={editing} onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
+        />
+      )}
+      {resetting && (
+        <AdminPasswordDialog
+          account={resetting} onClose={() => setResetting(null)}
+          onReset={(account) => { setResetting(null); setShown({ username: account.username, password: account.password, created: false }); load(); }}
         />
       )}
       <PasswordDialog shown={shown} onDone={() => setShown(null)} />
@@ -158,6 +169,51 @@ function PasswordDialog({ shown, onDone }: { shown: Shown | null; onDone: () => 
         </div>
         <div className="dialog-foot">
           <button type="submit" autoFocus>I have noted it</button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+// A new password for another admin. The server asks for your own password first, so that a browser
+// left logged in cannot lock the other admins out (api/app/admin.py).
+function AdminPasswordDialog({ account, onClose, onReset }: { account: Account; onClose: () => void; onReset: (account: NewAccount) => void }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      onReset(await api<NewAccount>(`/admin/users/${account.id}/reset-password`, {
+        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ your_password: password }),
+      }));
+    } catch (e) {
+      setError(message(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open title={`New password for ${account.username}`} onClose={onClose}>
+      <form onSubmit={submit}>
+        <div className="dialog-body">
+          <p>
+            {account.name} is an admin. They are logged out everywhere, and their current password stops working.
+          </p>
+          <label>
+            Your own password
+            <input type="password" name="your-password" autoComplete="current-password" required autoFocus
+              value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <p className="muted">Asked for an admin&apos;s account only, so that a browser left logged in cannot lock the other admins out.</p>
+          {error && <p className="error" role="alert">{error}</p>}
+        </div>
+        <div className="dialog-foot">
+          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" disabled={busy || !password}>{busy ? "Making a password…" : "Make a new password"}</button>
         </div>
       </form>
     </Dialog>

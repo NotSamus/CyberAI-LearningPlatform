@@ -339,6 +339,25 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - "Due soon" and the timeline now show much the same assignments. Due soon could go, or the
   timeline could leave out what Up next lists.
 
+## Admins reset other admins' passwords (2026-10-19)
+- Admin › Accounts › ⋯ › New password now works on other admins' accounts too. This replaces the
+  2026-10-02 rule that admin passwords are set only on the server. (Admin rights: see the next section.)
+- For an admin's account the site first asks for your own password (`auth.confirm_password`, the same
+  check My account uses: 5 wrong tries from one address, then 15 minutes' wait). That way a browser
+  left logged in, or a login taken through a student's notebook in `--lan` mode, cannot lock the other
+  admins out. Your own account is not reset there: My account asks for your current password.
+- Files: `reset_password` in `api/app/admin.py` (body `{"your_password": ...}`, only needed for an
+  admin's account), `confirm_password` in `api/app/auth.py` (change_password uses it too),
+  AdminPasswordDialog in `frontend/app/admin/accounts/page.tsx`, test
+  `test_another_admins_new_password_needs_your_own` in `test/api/test_security.py`.
+- Fixed on the way, in `components/Dialog.tsx`: no dialog ever focused its first field. A field's
+  autoFocus ran before the dialog was shown, so the browser focused the Close button, and a space typed
+  into "the field" closed the dialog. The contents now go in once the dialog is open.
+- Checked: `./check.sh` (113 tests, ruff, tsc, ESLint). In the browser at 1024 px with answers faked in
+  the page: focus in Add account, Edit and the new dialog; wrong password shows the message, right one
+  shows the new password once; your own row's New password is greyed out.
+- Not verified: against the real backend in a browser (no admin password at hand; the API is covered
+  by the tests). On the server: `git pull`, `docker compose up -d --build` (no migration).
 
 ## Admin rights from the site (2026-10-19)
 - Admin > Accounts, a teacher's ⋯ menu: **Make admin**. An admin's ⋯ menu: **Remove admin rights**
@@ -372,9 +391,8 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 
 ### Not verified
 - In a browser against the real backend (the route itself is covered by the tests).
-- The cursor in the password field when the dialog opens: no dialog does that on this branch (Close gets
-  the focus). Fixed in `Dialog.tsx` in the main checkout (uncommitted), which this branch leaves alone;
-  check it again after the merge.
+- The cursor in the password field when the dialog opens, with the `Dialog.tsx` fix from the section
+  above (the fix came in with the merge; it was not tried in the browser on this branch).
 
 ### Overlaps with the other work of 2026-10-19
 - The main checkout (an admin's new password after typing your own) adds the identical `confirm_password`

@@ -99,14 +99,28 @@ def change_user(user_id: int, body: AccountChanges, admin: PlatformUser = Depend
     return _account(user)
 
 
+class PasswordReset(BaseModel):
+    your_password: str = ""     # the acting admin's own password: asked for when the account is another admin's
+
+
 @router.post("/users/{user_id}/reset-password")
-def reset_password(user_id: int, admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db)):
+def reset_password(
+    user_id: int, request: Request, body: PasswordReset | None = None,
+    admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db),
+):
     """For someone who forgot their password: a new one is generated and returned once, and the
-    account is logged out everywhere. Not for admin accounts: their passwords are only set on the
-    server itself (app/manage.py), so that one admin's browser cannot take over another admin."""
+    account is logged out everywhere. Another admin's account too, but only once the acting admin has
+    typed their own password again, so that a browser left logged in (or a login taken from it) cannot
+    lock every other admin out. Your own password is changed under My account, which asks for the
+    current one, or on the server (app/manage.py)."""
     user = _user_or_404(db, user_id)
+    if user.id == admin.id:
+        raise HTTPException(403, "Change your own password under My account.")
     if user.is_admin:
-        raise HTTPException(403, "An admin's password is set on the server: python -m app.manage set-password " + user.username)
+        auth.confirm_password(
+            db, request, admin.username, body.your_password if body else "", "admin-password-reset",
+            "Your password is wrong, so the admin's password was not changed.",
+        )
     password = _new_password()
     auth.set_password(db, user, password)
     return {**_account(user), "password": password}

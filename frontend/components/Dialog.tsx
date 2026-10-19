@@ -1,6 +1,6 @@
 "use client";
 import { X } from "lucide-react";
-import { useEffect, useId, useRef } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 // A dialog over the page, for a small form. Put the form's fields in <div className="dialog-body">
 // and its buttons in <div className="dialog-foot">, inside one <form>.
@@ -15,12 +15,17 @@ export default function Dialog({ open, title, onClose, dismissible = true, child
 }) {
   const box = useRef<HTMLDialogElement | null>(null);
   const heading = useId();
+  // The contents are put in only once the dialog is open. A field's autoFocus acts when the field is
+  // put in, and nothing in a dialog that is not shown yet can take focus: the browser would then
+  // focus the first button in it, Close, instead of the field. Before paint, so nothing flickers.
+  const [shown, setShown] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = box.current;
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
+    setShown(open);
   }, [open]);
 
   return (
@@ -37,7 +42,7 @@ export default function Dialog({ open, title, onClose, dismissible = true, child
         else box.current?.showModal();
       }}
     >
-      {open && (
+      {open && shown && (
         <>
           <div className="dialog-head">
             <h2 id={heading}>{title}</h2>

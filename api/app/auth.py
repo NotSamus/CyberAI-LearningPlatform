@@ -242,12 +242,7 @@ def change_password(body: PasswordChange, request: Request, response: Response, 
     user = user_for_session(db, token) if token else None
     if user is None:
         raise HTTPException(401, "not logged in")
-    attempt = (request.client.host if request.client else "", f"password-change:{user.username}")
-    _register_attempt(attempt)
-    if authenticate(db, user.username, body.current_password) is None:
-        raise HTTPException(400, "The current password is wrong.")
-    with _attempts_lock:
-        _attempts.pop(attempt, None)
+    confirm_password(db, request, user.username, body.current_password, "password-change", "The current password is wrong.")
     try:
         set_password(db, user, body.new_password)
     except AccountError as e:
