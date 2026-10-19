@@ -35,13 +35,21 @@ if [ "${1:-}" = "--lan" ]; then
     echo "Could not find this computer's network address. Pass it:  DEV_HOST=192.168.x.x ./dev.sh --lan" >&2
     exit 1
   fi
-  # Others can now reach the hub and the backend, so the secrets written in this repository will
-  # not do: make new ones for this run (the hub container picks them up when it starts).
-  export HUB_API_TOKEN="$(openssl rand -hex 32)"
-  export OAUTH_CLIENT_SECRET="$(openssl rand -hex 32)"
-  export GRADER_TOKEN="$(openssl rand -hex 32)"
+  # Other devices open the site and the hub at this computer's address. dev-tunnel.sh passes
+  # LISTEN_ADDRESS=127.0.0.1: its SSH tunnel reaches them on the server's own localhost.
+  LISTEN_ADDRESS="${LISTEN_ADDRESS:-0.0.0.0}"
 fi
 export DEV_HOST="${DEV_HOST:-localhost}"                                   # frontend (next.config.ts)
+# Where the frontend and the hub listen: this computer only, unless --lan.
+export LISTEN_ADDRESS="${LISTEN_ADDRESS:-127.0.0.1}"                       # frontend, hub (docker-compose.dev.yml)
+
+# New secrets on every start, never the ones written in this repository: the backend listens on every
+# address of this computer (on Linux the hub container can only reach it that way), and whoever can use
+# the hub's API with a known token can run code in everyone's notebooks. The hub and grader containers
+# pick them up when they start.
+export HUB_API_TOKEN="$(openssl rand -hex 32)"
+export OAUTH_CLIENT_SECRET="$(openssl rand -hex 32)"
+export GRADER_TOKEN="$(openssl rand -hex 32)"
 
 port_in_use() {
   # Only a listening server counts; Docker Desktop keeps closed client sockets to these ports around.
@@ -105,6 +113,8 @@ else
   echo "   Docker is not running - skipping Postgres and JupyterHub (no database; Open Notebook will report it unreachable)."
 fi
 
+# Every address, not only localhost: on Linux the hub container reaches the backend at the Docker
+# bridge's address (host.docker.internal), not at the host's localhost.
 (cd "$BACKEND_DIR" && uvicorn app.main:app --reload --host 0.0.0.0 --port $BACKEND_PORT) &
 BACKEND_PID=$!
 if [ "$BACKEND_PORT" != "$REQUESTED_BACKEND_PORT" ]; then
@@ -116,7 +126,7 @@ fi
 if port_in_use $FRONTEND_PORT; then
   echo "   Frontend port $FRONTEND_PORT already in use - skipping next."
 else
-  (cd "$FRONTEND_DIR" && npx next dev -p "$FRONTEND_PORT") &
+  (cd "$FRONTEND_DIR" && npx next dev -p "$FRONTEND_PORT" -H "$LISTEN_ADDRESS") &
   FRONTEND_PID=$!
   echo "   Frontend -> $APP_ORIGIN"
 fi

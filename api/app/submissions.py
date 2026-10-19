@@ -46,7 +46,8 @@ def details(submission: Submission, for_teacher: bool) -> dict:
         "graded_by_teacher": submission.graded_by is not None,
         "questions": grading.questions(submission.results, with_hidden_output=for_teacher),
         "public_tests": grading.public_tests(submission.results),
-        # Why the autograder could not run it. For the student: only that it failed.
+        # Why the autograder could not run it, or why its results were corrected (status "graded").
+        # For the student: only that it failed.
         "error": submission.error if for_teacher else None,
     } | ({"public_output": grading.public_output(submission.results)} if for_teacher else {})
 
@@ -110,16 +111,45 @@ def grade_by_hand(db: Session, submission: Submission, assignment: Assignment, t
     db.commit()
 
 
+def _students_version(assignment_id: int) -> bytes:
+    with session_factory() as db:
+        return db.scalar(select(Assignment.notebook).where(Assignment.id == assignment_id))
+
+
+def _remember_points(assignment_id: int, points: dict[str, float]) -> None:
+    """For an assignment uploaded before each question's points were read at upload."""
+    with session_factory() as db:
+        assignment = db.get(Assignment, assignment_id)
+        if assignment is not None and assignment.question_points is None:
+            assignment.question_points, assignment.points = points, sum(points.values())
+            db.commit()
+
+
+def _mismatch_note(found: list[str]) -> str | None:
+    """For the teacher, when the results claimed other questions or points than the assignment has."""
+    if not found:
+        return None
+    return "\n".join([
+        "Otter's results did not match this assignment's tests, so its own questions and points were used:",
+        *(f"- {line}" for line in found),
+        "The student's code runs next to the tests and can change what they report: look at the notebook.",
+    ])
+
+
 async def grade_submission(submission_id: int, attempt: int) -> None:
     """Has Otter grade one submission and stores the outcome. Does nothing when the student has
     submitted again in the meantime (`attempt` no longer matches): that newer notebook has its own
-    grading on the way."""
+    grading on the way. The score counts only the assignment's own questions, with their own points
+    (grading.checked), whatever the results say."""
     current = (Submission.id == submission_id, Submission.attempt == attempt)
 
     def start():
         with session_factory() as db:
             job = db.execute(
-                select(Submission.notebook, Assignment.autograder, Assignment.notebook_name, Assignment.requires_gpu)
+                select(
+                    Submission.notebook, Assignment.id, Assignment.autograder, Assignment.notebook_name,
+                    Assignment.requires_gpu, Assignment.question_points,
+                )
                 .join(Assignment, Assignment.id == Submission.assignment_id)
                 .where(*current, Submission.status.in_(("queued", "grading")))
             ).first()
@@ -132,9 +162,16 @@ async def grade_submission(submission_id: int, attempt: int) -> None:
     if job is None:
         return
     try:
-        results = await grading.grade(*job)
+        points = job.question_points
+        if points is None:          # uploaded before the points were read at upload: worked out once, now
+            given = await run_in_threadpool(_students_version, job.id)
+            points = await grading.question_points(given, job.autograder, job.notebook_name, job.requires_gpu)
+            await run_in_threadpool(_remember_points, job.id, points)
+        results, found = grading.checked(
+            await grading.grade(job.notebook, job.autograder, job.notebook_name, job.requires_gpu), points,
+        )
         score, max_score = grading.totals(results)
-        outcome = dict(status="graded", results=results, score=score, max_score=max_score, error=None)
+        outcome = dict(status="graded", results=results, score=score, max_score=max_score, error=_mismatch_note(found))
     except grading.GradingError as e:
         outcome = dict(status="failed", results=None, score=None, max_score=None, error=str(e))
 

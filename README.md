@@ -95,8 +95,14 @@ This is for trying the site with people you trust, not for a class:
 - The site and the notebooks share one address, so a notebook server receives the visitor's platform
   login. Someone with a notebook could use that to act as a teacher who opens their notebook server.
   On the real server the two have separate addresses and HTTPS, which prevents it (`deploy/README.md`).
-- The hub's API and the notebooks become reachable from the network, so `--lan` makes new random
-  secrets on every start in place of the ones written in this repository.
+- The hub's API and the notebooks become reachable from the network. `dev.sh` makes new random secrets
+  on every start (also without `--lan`) in place of the ones written in this repository.
+
+Without `--lan`, the site and the hub listen on this computer only (127.0.0.1). The backend listens on
+every address, because on Linux the hub container can reach it only that way; it only answers with
+what a logged-in browser would get. Through `dev-tunnel.sh`, the site and the hub listen only on the
+server's own localhost, where the tunnel reaches them, so the hub's port does not get through the
+server's firewall (Docker's published ports otherwise do).
 
 ## Accounts
 
@@ -142,7 +148,7 @@ python -m app.manage create-user maria --name "Maria Lopez"        # same as the
 python -m app.manage list-users
 ```
 
-Roles are `student` and `teacher` (teachers get GPU notebooks and are JupyterHub admins). `--admin` is
+Roles are `student` and `teacher` (teachers get GPU notebooks). `--admin` is
 separate: it marks who may manage accounts. Usernames are not case sensitive. Passwords are stored only
 as Argon2 hashes. A login lasts 7 days. Logging out ends it on the server and also logs the browser out
 of JupyterHub.
@@ -150,7 +156,7 @@ The same commands run on the server: see `deploy/README.md`.
 
 Who is an admin or a teacher is decided on the server for every request: the browser stores nothing
 about it (no password, no role), only a session cookie that page scripts cannot read. Platform admins
-and teachers are JupyterHub admins.
+are JupyterHub admins; teachers are not, because JupyterHub's admin role opens every notebook server.
 
 ## Where things are
 
@@ -395,8 +401,10 @@ that one server for two minutes, and deletes it afterwards (`test/api/test_hub_c
 Current limits: an assignment is one notebook file (no extra data files) and its file cannot be replaced
 after upload. Every teacher manages every course and assignment. Only the newest submission of a student
 is kept. Otter runs the student's code and the tests in one process, so a student's code can read the
-hidden tests there and influence its own autograder score (the platform counts no question for more
-than its points); when a score looks wrong, open the stored notebook from the gradebook and read it. Lessons can be given to all students or to one course, not to chosen students; two teachers
+hidden tests there and influence its own autograder score within the assignment's questions (the
+platform counts only those questions, none for more than the points read from the teacher's tests at
+upload, and tells the teacher in the gradebook when the results claimed otherwise); when a score looks
+wrong, open the stored notebook from the gradebook and read it. Lessons can be given to all students or to one course, not to chosen students; two teachers
 editing the same lesson at once overwrite each other; code is coloured where it is read, not while it is
 written in the editor, and Markdown has no math formulas yet. Locally the "GPU" profile is simulated: same
 checks, no GPU attached, and it uses the CPU image, so `import torch` fails unless you pass

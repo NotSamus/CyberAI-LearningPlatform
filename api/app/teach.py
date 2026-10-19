@@ -99,8 +99,10 @@ async def create_assignment(request: Request, teacher: PlatformUser = Depends(re
     teacher then chooses who gets it and publishes it (PATCH below).
 
     A notebook written in Otter Assign format becomes an autograded assignment: Otter makes the
-    version students get (solutions removed) and the autograder package, in the grading service.
-    That takes as long as running the notebook takes. Any other notebook is stored as it is.
+    version students get (solutions removed) and the autograder package, in the grading service,
+    then grades that version once with nothing answered, for each question's points (submissions
+    are checked against them). That takes as long as running the notebook twice. Any other
+    notebook is stored as it is.
 
     A web form with the fields `title`, `file` and optionally `description`, `requires_gpu`, `due_at`.
     The form is read here and not declared as parameters, so that the account check above comes
@@ -130,7 +132,10 @@ async def create_assignment(request: Request, teacher: PlatformUser = Depends(re
         if grading.is_otter_master(fields["notebook"]):
             master = fields["notebook"]
             student, autograder = await grading.prepare(master, name, fields["requires_gpu"])
-            fields.update(notebook=student, master=master, autograder=autograder, points=grading.total_points(student))
+            points = await grading.question_points(student, autograder, name, fields["requires_gpu"])
+            fields.update(
+                notebook=student, master=master, autograder=autograder, question_points=points, points=sum(points.values()),
+            )
         assignment = await run_in_threadpool(lambda: assignments.create(db, **fields))
     except assignments.AssignmentError as e:
         raise HTTPException(400, str(e))

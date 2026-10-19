@@ -75,6 +75,10 @@ class Assignment(Base):
     autograder: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
     autograded: Mapped[bool] = mapped_column(default=False)
     points: Mapped[float | None] = mapped_column()                      # the most a submission can score, when known
+    # Autograded: each question's points, {"q1": 2.0, ...}, from Otter grading the students' version
+    # with nothing answered (app/grading.py, question_points). A submission's results are checked
+    # against these, never believed: the student's code runs next to the tests and can change them.
+    question_points: Mapped[dict | None] = mapped_column(JSONB)
     published: Mapped[bool] = mapped_column(default=False)              # drafts are visible to teachers only
     # Who gets it: every student (including ones added later), the students of one course, and/or
     # students chosen by name (AssignmentStudent below).

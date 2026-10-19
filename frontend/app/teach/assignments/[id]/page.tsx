@@ -241,6 +241,13 @@ function GradeForm({ submission, autograded, outOf, hasNext, onRegrade, onGrade 
           <pre>{submission.error}</pre>
         </>
       )}
+      {/* Graded, but the results claimed other questions or points than the assignment has (api/app/grading.py) */}
+      {submission.status !== "failed" && submission.error && (
+        <>
+          <p className="error">Look at this notebook before trusting its score:</p>
+          <pre>{submission.error}</pre>
+        </>
+      )}
       {submission.questions.map((q) => (
         <details key={q.name}>
           <summary>{q.name}: {points(q.score)} / {points(q.max_score)}</summary>

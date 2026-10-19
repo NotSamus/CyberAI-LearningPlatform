@@ -21,12 +21,15 @@ services:
 
   jupyterhub:
     build: ./jupyterhub
-    ports: ["8081:8000"]
+    # This computer only, unless ./dev.sh --lan sets LISTEN_ADDRESS (Docker's published ports also get
+    # past a Linux server's firewall, so an address left open here is open to the network)
+    ports: ["${LISTEN_ADDRESS:-127.0.0.1}:8081:8000"]
     stop_grace_period: 60s        # time for the hub to stop every notebook container on shutdown
     extra_hosts: ["host.docker.internal:host-gateway"]
     environment:
-      # dev.sh sets these when other ports are used, or with --lan (this computer's network address
-      # instead of localhost, and random secrets instead of the two well-known ones below).
+      # dev.sh sets these: other ports when they are taken, this computer's network address instead
+      # of localhost with --lan, and on every start random secrets instead of the well-known ones below
+      # (those are only used when the hub is started on its own, by dev-hub.sh).
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
       HUB_ORIGIN: ${HUB_ORIGIN:-http://localhost:8081}
       PLATFORM_INTERNAL_URL: ${PLATFORM_INTERNAL_URL:-http://host.docker.internal:8003}

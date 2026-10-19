@@ -9,10 +9,12 @@ Nothing is executed in this process, which can reach the database. The work is d
 service (grader/ at the project root), in a throwaway container without network access.
 
 Otter runs the student's code and the tests in one process, so the results that come back are only
-as trustworthy as that code: it can read the hidden tests there and change what Otter reports. So
-the results are checked rather than believed (a question scores between 0 and its maximum), and a
-student is never sent Otter's text about a test, which could carry anything their code printed or
-returned: only each question's score and whether its public tests passed. Teachers get everything.
+as trustworthy as that code: it can read the hidden tests there and change what Otter reports, the
+questions and their points included. So the results are checked rather than believed: only the
+assignment's own questions count, each between 0 and the points the teacher's tests give it
+(`question_points`, read once when the notebook is uploaded). A student is never sent Otter's text
+about a test, which could carry anything their code printed or returned: only each question's score
+and whether its public tests passed. Teachers get everything.
 """
 import base64
 import json
@@ -55,21 +57,6 @@ def is_otter_master(notebook: bytes) -> bool:
     )
 
 
-def total_points(student_notebook: bytes) -> float | None:
-    """The points of all questions together, read from the tests Otter put in the students'
-    notebook. None when that cannot be told (it is then known once a submission is graded)."""
-    tests = json.loads(student_notebook).get("metadata", {}).get("otter", {}).get("tests") or {}
-    total = 0.0
-    for test in tests.values():
-        points = test.get("points")
-        if isinstance(points, list) and all(isinstance(p, (int, float)) for p in points):
-            points = sum(points)
-        if not isinstance(points, (int, float)) or isinstance(points, bool):
-            return None
-        total += points
-    return total if tests else None
-
-
 async def _ask_grader(path: str, name: str, gpu: bool, files: dict[str, bytes]) -> dict:
     try:
         async with httpx.AsyncClient(base_url=config.GRADER_URL, timeout=GRADER_TIMEOUT) as grader:
@@ -107,6 +94,14 @@ async def grade(notebook: bytes, autograder: bytes, name: str, gpu: bool) -> dic
     return results
 
 
+async def question_points(student_notebook: bytes, autograder: bytes, name: str, gpu: bool) -> dict[str, float]:
+    """Each question's points, {"q1": 2.0, ...}: Otter grades the students' version with nothing
+    answered. Only the teacher's notebook and tests run there, so unlike a submission's results
+    these can be believed. Submissions are checked against them (`checked`)."""
+    results = await grade(student_notebook, autograder, name, gpu)
+    return {str(t.get("name", "")): _number(t["max_score"]) for t in _scored(results)}
+
+
 def _number(value) -> float | None:
     """`value` if it is a real, finite number (not True, not NaN), else None."""
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
@@ -125,6 +120,28 @@ def _scored(results: dict) -> list[dict]:
 def _score(question: dict) -> float:
     """A question's score, kept between 0 and the question's maximum, whatever the results say."""
     return min(max(_number(question.get("score")) or 0.0, 0.0), _number(question["max_score"]))
+
+
+def checked(results: dict, points: dict[str, float]) -> tuple[dict, list[str]]:
+    """The results with the assignment's own questions and points (`question_points`) in place of the
+    ones that came back: each question scores between 0 and its real points, one the results leave
+    out scores 0, and one that is not part of the assignment is dropped. Otter's other entries (the
+    public tests' report) stay as they are. The second value says what did not match, for the teacher."""
+    scored = _scored(results)
+    reported = {str(t.get("name", "")): t for t in scored}
+    found = [f"{name[:60]}: not a question of this assignment" for name in reported if name not in points]
+    questions = []
+    for name, most in points.items():
+        claim = reported.get(name)
+        if claim is None:
+            found.append(f"{name}: missing from the results")
+            claim = {"name": name, "visibility": "hidden", "output": ""}
+        elif _number(claim["max_score"]) != most:
+            found.append(f"{name}: reported as out of {_number(claim['max_score']):g} points; it has {most:g}")
+        score = min(max(_number(claim.get("score")) or 0.0, 0.0), most)
+        questions.append({**claim, "name": name, "max_score": most, "score": score})
+    others = [t for t in results.get("tests", []) if isinstance(t, dict) and all(t is not s for s in scored)]
+    return {**results, "tests": others + questions}, found[:20]
 
 
 def totals(results: dict) -> tuple[float, float]:

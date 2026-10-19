@@ -58,13 +58,15 @@ done
 # On the server: stop if a site already runs on the port (it would keep its old address and refuse
 # every login), then start dev.sh. In an interactive shell, because conda is set up in .bashrc or
 # .zshrc; with exec, so Ctrl+C and a dropped connection reach dev.sh, which then stops its containers.
-START="cd $REMOTE_DIR && conda activate $CONDA_ENV && exec env DEV_HOST=$DEV_HOST FRONTEND_PORT=$FRONTEND_PORT ./dev.sh --lan"
-REMOTE="if curl -s -o /dev/null -m 3 http://localhost:$FRONTEND_PORT; then echo 'Port $FRONTEND_PORT is already in use on $SERVER. Stop the ./dev.sh running there (Ctrl+C), then run this again.'; exit 1; fi; exec \"\$SHELL\" -ic '$START'"
+# LISTEN_ADDRESS=127.0.0.1: the site and the hub listen only on the server's own localhost, where the
+# tunnel reaches them; otherwise the hub's port would get through the server's firewall.
+START="cd $REMOTE_DIR && conda activate $CONDA_ENV && exec env DEV_HOST=$DEV_HOST FRONTEND_PORT=$FRONTEND_PORT LISTEN_ADDRESS=127.0.0.1 ./dev.sh --lan"
+REMOTE="if curl -s -o /dev/null -m 3 http://127.0.0.1:$FRONTEND_PORT; then echo 'Port $FRONTEND_PORT is already in use on $SERVER. Stop the ./dev.sh running there (Ctrl+C), then run this again.'; exit 1; fi; exec \"\$SHELL\" -ic '$START'"
 
 echo "==> Starting the site on $SERVER, shared at http://$DEV_HOST:$FRONTEND_PORT"
 echo "    Open that address on every computer, this one too (not localhost). Ctrl+C stops everything."
 ssh -t \
   -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
-  -L "0.0.0.0:$FRONTEND_PORT:localhost:$FRONTEND_PORT" \
-  -L "0.0.0.0:$HUB_PORT:localhost:$HUB_PORT" \
+  -L "0.0.0.0:$FRONTEND_PORT:127.0.0.1:$FRONTEND_PORT" \
+  -L "0.0.0.0:$HUB_PORT:127.0.0.1:$HUB_PORT" \
   "$SERVER" "$REMOTE"
