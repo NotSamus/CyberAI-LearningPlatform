@@ -106,6 +106,7 @@ export type Account = {
 };
 
 export type NewAccount = Account & { password: string };    // the password is sent once, at creation
+export type NewPassword = NewAccount & { notice?: string };  // notice: its open notebooks could not be stopped
 
 export const HUB_ORIGIN = process.env.NEXT_PUBLIC_HUB_ORIGIN ?? "http://localhost:8081";
 

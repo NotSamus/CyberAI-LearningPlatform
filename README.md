@@ -12,7 +12,7 @@ api/app/config.py              settings (env vars, dev defaults)
 api/app/db.py                  SQLAlchemy engine, sessions, model Base
 api/app/models.py              database tables: users, login sessions, courses, assignments, submissions, announcements, lessons
 api/app/auth.py                accounts, password hashing, login/logout, changing your password, limit on password guessing
-api/app/admin.py               admin-only API behind Admin > Accounts (add, edit, new password, remove)
+api/app/admin.py               admin-only API behind Admin > Accounts (add, edit, new password, admin rights, remove)
 api/app/manage.py              command line tool: create accounts, grant admin, reset passwords, import a notebook
 api/app/assignments.py         assignments: who sees which, who opened what, checks on uploaded notebooks
 api/app/courses.py             courses (groups of students) and announcements
@@ -113,18 +113,26 @@ After that, an admin manages accounts in the site, under **Admin** (top bar) > *
 - **Edit**: the name and whether the account may use GPU notebooks. The username and the role are fixed
   (the account's notebook files are stored under a name made from its role and number).
 - **New password** (in the row's ⋯ menu), for someone who forgot theirs: again generated and shown once,
-  and the account is logged out everywhere. For another admin's account the site first asks for your own
-  password (guesses are limited like logins), so a browser left logged in cannot lock the other admins
-  out. Your own password is changed under **My account**, not here.
+  and the account is logged out everywhere, its running notebooks and JupyterHub login included (its
+  files stay). For another admin's account the site first asks for your own password (guesses are
+  limited like logins), so a browser left logged in cannot lock the other admins out, and the backend
+  logs who did it. Your own password is changed under **My account**, not here.
 - **Remove** (in the ⋯ menu): deletes the account with its submissions and grades, stops its notebook servers and ends
   its JupyterHub login. The files in its notebook home stay on the server.
 
 Everyone changes their own password under **My account**, in the menu under their name at the top right (the current password is asked for
 again, and every other device is logged out).
 
-Admin accounts are different on purpose: the site cannot give or take admin rights, and cannot remove an
-admin. That needs access to the server itself, with the command line tool (also the way back in when no
-admin can log in):
+Admin rights are given in the site too, but only to teachers, and only after the admin types their own
+password again (so a browser left logged in cannot change who is an admin; guesses are limited like logins):
+
+- **Make admin** (in a teacher's ⋯ menu): the teacher can manage accounts as well, at once, without
+  logging in again. Students are never made admins.
+- **Remove admin rights** (in an admin's ⋯ menu): from another admin, never from yourself, so there is
+  always an admin left. The account and its role stay.
+
+The site removes an admin only once their admin rights are gone. On the server itself the command line
+tool does all of it, for any account (also the way back in when no admin can log in):
 
 ```bash
 python -m app.manage set-admin maria                               # or: set-admin maria --remove
@@ -339,7 +347,8 @@ may show in a frame (`frontend/next.config.ts`).
 
 After 5 wrong passwords for one username from one network address, further logins for that username from
 that address are refused for 15 minutes (`MAX_LOGIN_ATTEMPTS` in `api/app/auth.py`). `test/api/test_security.py`
-attacks the login and the admin API: password guessing (also of the current password when changing it),
+attacks the login and the admin API: password guessing (also of a password typed again when already
+logged in: My account, another admin's new password, admin rights, which share one limit of 5),
 SQL injection, forged and planted cookies, oversized input, requests sent from other websites, and a
 student asking for admin data or trying to create, change or remove accounts. `test_assignments.py`,
 `test_courses.py` and `test_grading.py` do the same for the teacher API: students trying to upload,

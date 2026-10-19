@@ -33,7 +33,8 @@ The last command asks for the password twice. It is never written to a file; Pos
 Argon2 hash. The server's database starts empty: accounts made on a laptop are not copied, so create
 them again here, and give the server's admin a long password of its own.
 
-Then log in to the site as that admin and add students and teachers under **Admin > Accounts**.
+Then log in to the site as that admin and add students and teachers under **Admin > Accounts**. A teacher
+who should manage accounts too is made an admin there (⋯ > Make admin, after typing your own password).
 
 Assignments are uploaded in the site too: **Teach > Assignments** (teachers and admins) > Upload notebook,
 choose who gets it, publish. Notebooks, submissions and grades are stored in Postgres, so there
@@ -132,6 +133,10 @@ and makes those tokens (`platform-role` in `jupyterhub/jupyterhub_config.py`). I
 server itself, but because it can make a token for any user it still reaches every notebook home in
 the end: keep it only in `deploy/.env`. To replace it, change it in `deploy/.env` and run
 `docker compose up -d`: the hub forgets the old token when it starts.
+
+The backend logs who gave another admin a new password, and who gave or took admin rights, in the
+site: `docker compose logs backend | grep "Admin "`. Docker keeps these lines only as long as that
+container: `docker compose up -d --build` makes a new one, so copy them out first if they matter.
 
 More account commands (same tool, `api/app/manage.py`):
 
