@@ -1,5 +1,5 @@
 "use client";
-import { Cpu, GraduationCap, KeyRound, School, Shield, Trash2, UserPlus } from "lucide-react";
+import { Cpu, GraduationCap, KeyRound, School, Shield, ShieldMinus, ShieldPlus, Trash2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import Chip from "@/components/Chip";
 import Dialog from "@/components/Dialog";
@@ -22,6 +22,7 @@ export default function AccountsPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);      // kept only in this page's memory, never in the address
+  const [rights, setRights] = useState<Account | null>(null);   // a teacher being made an admin, or an admin losing that
 
   const load = useCallback(() => {
     api<Account[]>("/admin/users").then(setAccounts).catch((e) => setLoadError(message(e)));
@@ -105,6 +106,8 @@ export default function AccountsPage() {
                         label={`More for ${a.username}`}
                         items={[
                           { label: "New password", icon: KeyRound, disabled: a.is_admin, onSelect: () => resetPassword(a) },
+                          ...(a.role === "teacher" && !a.is_admin ? [{ label: "Make admin", icon: ShieldPlus, onSelect: () => setRights(a) }] : []),
+                          ...(a.is_admin ? [{ label: "Remove admin rights", icon: ShieldMinus, disabled: a.id === me?.id, onSelect: () => setRights(a) }] : []),
                           { label: "Remove", icon: Trash2, danger: true, disabled: a.is_admin || a.id === me?.id, onSelect: () => remove(a) },
                         ]}
                       />
@@ -117,9 +120,10 @@ export default function AccountsPage() {
         </table>
       </div>
       <p className="muted hint">
-        “Notebook user” is the name that account has in the JupyterHub section. Admin accounts are only changed on
-        the server, with the command line tool: admin rights are given and taken away there, so their new password
-        and removal are not offered here. You cannot remove your own account.
+        “Notebook user” is the name that account has in the JupyterHub section. Making a teacher an admin, and taking
+        admin rights away, are in the ⋯ menu and ask for your own password first; your own rights stay. An admin’s new
+        password is only set on the server, with the command line tool, and an admin is removed once their admin rights
+        are gone. You cannot remove your own account.
       </p>
 
       <AddAccountDialog
@@ -133,6 +137,7 @@ export default function AccountsPage() {
         />
       )}
       <PasswordDialog shown={shown} onDone={() => setShown(null)} />
+      {rights && <AdminRightsDialog account={rights} onClose={() => setRights(null)} onDone={() => { setRights(null); load(); }} />}
     </>
   );
 }
@@ -260,6 +265,55 @@ function EditAccountDialog({ account, onClose, onSaved }: { account: Account; on
         <div className="dialog-foot">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
           <button type="submit" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+// Admin rights, given to a teacher or taken from another admin. The server asks for your own password
+// first, so that a browser left logged in cannot change who is an admin (api/app/admin.py).
+function AdminRightsDialog({ account, onClose, onDone }: { account: Account; onClose: () => void; onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const giving = !account.is_admin;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/admin/users/${account.id}/admin`, {
+        method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ admin: giving, your_password: password }),
+      });
+      onDone();
+    } catch (e) {
+      setError(message(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open title={giving ? `Make ${account.username} an admin` : `Remove admin rights from ${account.username}`} onClose={onClose}>
+      <form onSubmit={submit}>
+        <div className="dialog-body">
+          <p>
+            {giving
+              ? `${account.name} can then manage every account, as you can: add, edit and remove accounts, and make other teachers admins.`
+              : `${account.name} stays a ${account.role}, but can no longer manage accounts.`}
+          </p>
+          <label>
+            Your own password
+            <input type="password" name="your-password" autoComplete="current-password" required autoFocus
+              value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <p className="muted">Asked for so that a browser left logged in cannot change who is an admin.</p>
+          {error && <p className="error" role="alert">{error}</p>}
+        </div>
+        <div className="dialog-foot">
+          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" disabled={busy || !password}>{busy ? "Saving…" : giving ? "Make admin" : "Remove admin rights"}</button>
         </div>
       </form>
     </Dialog>

@@ -6,7 +6,7 @@ frontend shows or hides is only a convenience and is never what protects this da
 import secrets
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -69,8 +69,8 @@ class NewAccount(BaseModel):
 @router.post("/users", status_code=201)
 def create_user(body: NewAccount, admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db)):
     """Creates a student or teacher account. The password is generated here and returned once, for the
-    admin to hand over; only its hash is stored. Admin rights are not given here: that stays with the
-    command line tool (app/manage.py), which needs access to the server itself."""
+    admin to hand over; only its hash is stored. Admin rights are not given here: a teacher gets them
+    afterwards, from `set_admin` below."""
     password = _new_password()
     try:
         user = auth.create_user(
@@ -122,7 +122,7 @@ async def delete_user(user_id: int, admin: PlatformUser = Depends(require_admin)
     if user.id == admin.id:
         raise HTTPException(403, "You cannot remove your own account.")
     if user.is_admin:
-        raise HTTPException(403, "Take away its admin rights on the server first: python -m app.manage set-admin " + user.username + " --remove")
+        raise HTTPException(403, "Take away its admin rights first (Remove admin rights, in the same menu).")
     try:
         await hub_client.delete_user(PlatformUser.from_db(user).hub_username)
     except httpx.HTTPError:
@@ -134,3 +134,38 @@ async def delete_user(user_id: int, admin: PlatformUser = Depends(require_admin)
 
     await run_in_threadpool(remove)
     return {"deleted": True}
+
+
+class AdminRights(BaseModel):
+    admin: bool                 # true gives admin rights, false takes them away
+    your_password: str = ""     # the acting admin's own password, typed again
+
+
+@router.put("/users/{user_id}/admin")
+def set_admin(
+    user_id: int, body: AdminRights, request: Request,
+    admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """Gives a teacher admin rights, so they can manage accounts too, or takes them away from another
+    admin. The acting admin types their own password again first, so that a browser left logged in
+    (or a login taken from it) cannot hand out admin rights or take them from everyone else. Students
+    are never made admins, and nobody takes away their own rights, so an admin is always left. The
+    command line (python -m app.manage set-admin) does the same on the server itself."""
+    user = _user_or_404(db, user_id)
+    if body.admin and user.role != "teacher":
+        raise HTTPException(400, "Only a teacher can be made an admin.")
+    if not body.admin and user.id == admin.id:
+        raise HTTPException(403, "You cannot take away your own admin rights.")
+    auth.confirm_password(
+        db, request, admin.username, body.your_password, "admin-rights",
+        "Your password is wrong, so the admin rights were not changed.",
+    )
+    if not body.admin:
+        # The admins' rows are locked until this is saved, so two admins taking each other's rights at
+        # the same moment cannot leave the site with none: the second waits, then is no admin any more.
+        admins = db.scalars(select(User.id).where(User.is_admin).with_for_update()).all()
+        if admin.id not in admins:
+            raise HTTPException(403, "This page is for admins only.")
+    user.is_admin = body.admin
+    db.commit()
+    return _account(user)

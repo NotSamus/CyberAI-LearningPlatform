@@ -29,6 +29,9 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   /settings links redirect. This replaces the 2026-10-02 decision to keep teaching inside Settings. (2026-10-13)
 - Brand: a navy top bar and login band with a cyan accent. Not UTEP's orange, and the UTEP name is
   not written in the site. (2026-10-13)
+- Admin rights are given in the site after all: an admin makes a teacher an admin, or takes the rights
+  from another admin, after typing their own password. Students are never made admins, and nobody takes
+  away their own. This replaces the 2026-10-02 decision to keep admin rights command-line only. (2026-10-19)
 
 ## How accounts, Settings and the JupyterHub panel work (2026-10-02)
 
@@ -144,7 +147,7 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   Removing stops that person's notebook servers and deletes their submissions; their notebook files stay.
 - Everyone changes their own password under Settings > My account.
 - Admin accounts stay command-line only: the site cannot give admin rights, reset an admin's
-  password, or remove an admin.
+  password, or remove an admin. (Admin rights: no longer so since 2026-10-19, see "Admin rights from the site".)
 
 ### Limits right now
 - Every teacher manages every course and assignment.
@@ -335,3 +338,51 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 ### Open question
 - "Due soon" and the timeline now show much the same assignments. Due soon could go, or the
   timeline could leave out what Up next lists.
+
+
+## Admin rights from the site (2026-10-19)
+- Admin > Accounts, a teacher's ⋯ menu: **Make admin**. An admin's ⋯ menu: **Remove admin rights**
+  (greyed out on my own row). Both open a small dialog that asks for my own password, then reload the list.
+  Replaces the 2026-10-02 decision that admin rights are command-line only; `set-admin` still works too.
+- Rules, all on the server (`set_admin` in `api/app/admin.py`, `PUT /api/admin/users/{id}/admin` with
+  `{admin, your_password}`):
+  - only teachers are made admins (a student: 400); nobody takes away their own rights (403);
+  - the acting admin's password is checked with `auth.confirm_password` (also used by the change of an
+    admin's password in the main checkout). 5 wrong guesses from one address, then 15 minutes of 429,
+    counted apart from logins and from the other password checks;
+  - taking rights away locks the admins' rows first, so two admins taking each other's rights at the same
+    moment cannot leave the site with no admin: the second finds its own rights gone (403).
+- It takes effect on the next request: the admin flag is read from the database every time, so the
+  teacher does not log in again. Nothing changes in JupyterHub (teachers are hub admins anyway).
+- An admin still cannot be removed from the site, but now the rights can be taken away first, then the
+  account removed. Students made admins on the command line can lose the rights in the site too.
+- Tests in `test/api/test_security.py` ("admin rights from the site"): student refused, missing or wrong
+  password, guesses cut off, the teacher gets the admin pages in the login they already had, non-admins
+  403, own rights refused, and the two-admins race (the test fails without the re-check). 116 tests pass.
+- No database change. On the UTEP server: `git pull`, `docker compose up -d --build`.
+
+### Checked
+- In the dev browser at 768, 1024 and 1440 px, light and dark, with made-up accounts fed to the page
+  (no admin password at hand): the ⋯ menu of a teacher (Make admin), of another admin (Remove admin
+  rights), of my own row (greyed out) and of a student (no entry); the dialog with a wrong password (the
+  message shows under it) and with the right one (the list reloads, the Admin chip comes or goes).
+- Only the frontend ran from the worktree (port 3002, against the backend already running), not
+  `dev.sh`: stopping `dev.sh` runs `docker compose down` on the dev Postgres, hub and grader, which
+  the main checkout was using at the time.
+
+### Not verified
+- In a browser against the real backend (the route itself is covered by the tests).
+- The cursor in the password field when the dialog opens: no dialog does that on this branch (Close gets
+  the focus). Fixed in `Dialog.tsx` in the main checkout (uncommitted), which this branch leaves alone;
+  check it again after the merge.
+
+### Overlaps with the other work of 2026-10-19
+- The main checkout (an admin's new password after typing your own) adds the identical `confirm_password`
+  to `auth.py` and the same `Request` import to `admin.py`: those merge as one. Conflicts to expect, all
+  small: the ⋯ menu's `items` and the hint under the table in `frontend/app/admin/accounts/page.tsx`
+  (keep both new menu entries, and both sentences of the hint), and README.md's Accounts section, which
+  still says an admin's password is only set on the server.
+- The "usernames-only" session changes the add and edit dialogs, `NewAccount`/`AccountChanges` and
+  `manage.py`; this work does not touch them. Two comments in `test_security.py` it may edit still say admin
+  rights cannot be given from the browser (`test_admin_creates_a_student_account` and the PATCH in
+  `test_admin_edits_resets_and_removes_accounts`): both remain true for those routes, but read oddly now.

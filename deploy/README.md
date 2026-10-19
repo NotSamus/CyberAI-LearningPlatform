@@ -33,7 +33,8 @@ The last command asks for the password twice. It is never written to a file; Pos
 Argon2 hash. The server's database starts empty: accounts made on a laptop are not copied, so create
 them again here, and give the server's admin a long password of its own.
 
-Then log in to the site as that admin and add students and teachers under **Admin > Accounts**.
+Then log in to the site as that admin and add students and teachers under **Admin > Accounts**. A teacher
+who should manage accounts too is made an admin there (⋯ > Make admin, after typing your own password).
 
 Assignments are uploaded in the site too: **Teach > Assignments** (teachers and admins) > Upload notebook,
 choose who gets it, publish. Notebooks, submissions and grades are stored in Postgres, so there
@@ -99,7 +100,8 @@ things depend on the browser sending the hub's cookie to the hub from a platform
 - **Admin > JupyterHub** shows JupyterHub's admin panel in a frame.
 
 Teachers and platform admins (`--admin`) are JupyterHub admins. The hub decides this when that person's
-hub session starts, so after `set-admin` they log out of the platform and in again.
+hub session starts, so after `set-admin` on a student account they log out of the platform and in again.
+Teachers are hub admins either way, so making a teacher an admin in the site (or no longer one) changes nothing there.
 
 Password guessing is limited: 5 wrong passwords for one username from one address, then 15 minutes of
 refusals. The counters are in the backend's memory (keep one uvicorn worker, as `api/Dockerfile` does;

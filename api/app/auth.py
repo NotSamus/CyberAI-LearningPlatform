@@ -180,6 +180,18 @@ def _register_attempt(key: tuple[str, str]) -> None:
         _attempts[key] = [*recent, now]
 
 
+def confirm_password(db: Session, request: Request, username: str, password: str, purpose: str, wrong: str) -> None:
+    """Asks a logged-in person for their own password again, before something a browser left logged
+    in must not be able to do. Guesses are limited like logins are (429), per address and per
+    `purpose`; a wrong password is refused with `wrong` (400)."""
+    attempt = (request.client.host if request.client else "", f"{purpose}:{username}")
+    _register_attempt(attempt)
+    if authenticate(db, username, password) is None:
+        raise HTTPException(400, wrong)
+    with _attempts_lock:
+        _attempts.pop(attempt, None)
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
