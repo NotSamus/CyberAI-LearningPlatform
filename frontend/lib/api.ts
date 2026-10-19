@@ -9,7 +9,8 @@ export type SubmissionSummary = {
   max_score: number | null;
 };
 
-// Teachers also get `output` (it describes the hidden tests) and `error` (the autograder's log).
+// Teachers also get `output` (it describes the hidden tests) and `error` (the autograder's log, or
+// why a graded submission's results were corrected).
 export type Question = { name: string; score: number; max_score: number; output?: string };
 
 // Whether a question's public tests passed. Students get no text from Otter: the student's code runs

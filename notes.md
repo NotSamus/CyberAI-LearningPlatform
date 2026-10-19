@@ -112,7 +112,9 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - Plain http: use test accounts only. A real password would cross the network unencrypted.
 - Campus and guest Wi-Fi often block device-to-device connections, and a VPN may too.
 - The site and the notebooks share one address in this mode, so it is for people I trust, not for a class.
-- Normal `./dev.sh` is localhost only and exposes nothing.
+- Normal `./dev.sh`: the site and the hub listen on this Mac only (127.0.0.1); the backend on every
+  address (on Linux the hub container needs that), with secrets made new on every start. Before
+  2026-10-19 the hub's 8081 was open to the network with the hub token written in the repository.
 
 ### What students see
 - Home page: announcements on top, then assignments grouped by course. Each assignment shows its status:
@@ -356,3 +358,24 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   shows the new password once; your own row's New password is greyed out.
 - Not verified: against the real backend in a browser (no admin password at hand; the API is covered
   by the tests). On the server: `git pull`, `docker compose up -d --build` (no migration).
+
+## Security fixes from the privilege review (2026-10-19)
+Review: findings 1, 2 and 4 fixed here (branch `claude/security-fixes`); 5 went to the admin-rights
+session; 3 (one address for every notebook server) needs a wildcard DNS name and certificate from UTEP IT.
+- `./dev.sh` makes new hub, OAuth and grader secrets on every start, not only with `--lan`. Without
+  `--lan` the site and the hub listen on this Mac only (`LISTEN_ADDRESS`, default 127.0.0.1); the
+  backend still listens on every address (on Linux the hub container reaches it that way).
+  `dev-tunnel.sh` passes `LISTEN_ADDRESS=127.0.0.1`, so on iqsec the hub's 8081 no longer gets through
+  the firewall: the tunnel reaches it on the server's own localhost.
+- Teachers are no longer JupyterHub admins; platform admins still are (`jupyterhub_config.py`,
+  `_hub_admins`). JupyterHub's admin role opened every notebook server to every teacher.
+- Autograding: when a notebook is uploaded, Otter also grades the students' version with nothing
+  answered, which gives each question's real points (`assignments.question_points`, new migration).
+  A submission's results are checked against those: only those questions count, none for more than
+  its points, and the gradebook says "Look at this notebook before trusting its score" when the results
+  claimed other questions or points. Uploading an autograded notebook takes one more Otter run.
+  Older assignments get their points when their next submission is graded.
+- Checked: Otter 7.0.0 in the notebook image grades the unanswered `otter-example` students' version
+  without stopping (q1 out of 2, q2 out of 3).
+- On the server: `git pull`, `docker compose up -d --build`, run the migration; teachers lose hub admin
+  at their next hub login (or untick it in Admin > JupyterHub). Steps in `deploy/README.md`.

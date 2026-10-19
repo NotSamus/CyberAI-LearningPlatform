@@ -65,6 +65,15 @@ which is built into the hub's image: the `--build` above applies it. Until both 
 run the new version, opening and submitting notebooks fail with "The notebook service returned an error".
 `PLATFORM_SESSION_SECRET` is no longer used: a value left in `deploy/.env` is simply ignored.
 
+**Once, when updating to the version where teachers stop being JupyterHub admins** (2026-10-19): the
+`--build` above puts the new `jupyterhub/jupyterhub_config.py` into the hub's image. A teacher who is
+still logged in to the hub keeps admin there until their hub session ends (logging out of the
+platform and in again ends it). To take it away at once, open **Admin > JupyterHub** and, for each
+`t-` user who is not a platform admin, Edit User and untick Admin. The same version adds a column
+(the migration above): autograded assignments uploaded before it get their questions' points when
+their next submission is graded, which runs Otter once more. Scores given before the update are not
+checked again; "Run the autograder again" in the gradebook checks one.
+
 Every secret in `deploy/.env` must be set, or `docker compose` stops and names the missing one. The
 backend also refuses to start when `PLATFORM_HUB_API_TOKEN`, `OAUTH_CLIENT_SECRET` or `GRADER_TOKEN` is
 shorter than 32 characters, contains `dev-` or is still `change-me` (`api/app/config.py`): generate them
@@ -98,8 +107,9 @@ things depend on the browser sending the hub's cookie to the hub from a platform
   hub session stays open until it expires.
 - **Admin > JupyterHub** shows JupyterHub's admin panel in a frame.
 
-Teachers and platform admins (`--admin`) are JupyterHub admins. The hub decides this when that person's
-hub session starts, so after `set-admin` they log out of the platform and in again.
+Only platform admins (`--admin`) are JupyterHub admins, not teachers: JupyterHub's admin role opens
+every notebook server, other teachers' and admins' too. The hub decides this when that person's hub
+session starts, so after `set-admin` they log out of the platform and in again.
 
 Password guessing is limited: 5 wrong passwords for one username from one address, then 15 minutes of
 refusals. The counters are in the backend's memory (keep one uvicorn worker, as `api/Dockerfile` does;

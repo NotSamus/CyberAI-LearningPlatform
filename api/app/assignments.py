@@ -225,9 +225,10 @@ def create(
     master: bytes | None = None,
     autograder: bytes | None = None,
     points: float | None = None,
+    question_points: dict[str, float] | None = None,
 ) -> Assignment:
-    """`master` and `autograder` are given for an autograded assignment (see app/grading.py);
-    `notebook` is then the version Otter made for students."""
+    """`master`, `autograder` and `question_points` are given for an autograded assignment (see
+    app/grading.py); `notebook` is then the version Otter made for students."""
     title = check_title(title)
     notebook_name = safe_notebook_name(filename)
     check_notebook(notebook)
@@ -242,6 +243,7 @@ def create(
         autograder=autograder,
         autograded=autograder is not None,
         points=points,
+        question_points=question_points,
         published=published,
         for_everyone=for_everyone,
         due_at=check_due_at(due_at),

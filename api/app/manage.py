@@ -79,7 +79,8 @@ def run(args: argparse.Namespace, db: Session) -> None:
         autograding = {}
         if grading.is_otter_master(notebook):       # as the upload in the site does: Otter makes the students' version
             student, autograder = asyncio.run(grading.prepare(notebook, name, args.gpu))
-            autograding = dict(master=notebook, autograder=autograder, points=grading.total_points(student))
+            points = asyncio.run(grading.question_points(student, autograder, name, args.gpu))
+            autograding = dict(master=notebook, autograder=autograder, question_points=points, points=sum(points.values()))
             notebook = student
         assignment = assignments.create(
             db, title=args.title, description=args.description, requires_gpu=args.gpu,

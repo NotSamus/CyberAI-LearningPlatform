@@ -111,6 +111,8 @@ def test_an_otter_notebook_becomes_an_autograded_assignment(people, hub, otter, 
     created = upload(teacher, "Functions lab", content=master).json()
     assert (created["autograded"], created["points"], created["notebook_name"]) == (True, 5.0, "lab.ipynb")
     assert otter["prepared"] == ["lab.ipynb"]
+    # The students' version is graded once with nothing answered: each question's real points.
+    assert otter["graded"] == ["lab.ipynb"] and db.get(Assignment, 1).question_points == {"q1": 2.0, "q2": 3.0}
     teacher.patch("/api/teach/assignments/1", json={"for_everyone": True, "published": True})
 
     # Students get the version without solutions. The teacher can get both back.
@@ -148,6 +150,18 @@ def test_a_notebook_otter_cannot_prepare_is_refused(people, db, monkeypatch):
     monkeypatch.setattr(grading, "prepare", unreachable)
     r = upload(teacher, "Functions lab", content=otter_master())
     assert r.status_code == 503 and "was not uploaded" in r.json()["detail"]
+
+    # Otter made the students' version but cannot grade it: its questions' points are not known.
+    async def prepared(master, name, gpu):
+        return student_version(), b"the autograder package"
+
+    async def cannot_grade(notebook, autograder, name, gpu):
+        raise grading.GradingError("Otter stopped with an error.", "NameError: name 'square' is not defined")
+
+    monkeypatch.setattr(grading, "prepare", prepared)
+    monkeypatch.setattr(grading, "grade", cannot_grade)
+    r = upload(teacher, "Functions lab", content=otter_master())
+    assert r.status_code == 400 and "Otter could not prepare this notebook" in r.json()["detail"]
     assert db.scalar(select(func.count()).select_from(Assignment)) == 0
 
 
@@ -171,7 +185,7 @@ def test_submit_is_graded_and_shown_to_the_student(lab, hub, otter):
     assert mine["questions"] == [{"name": "q1", "score": 2.0, "max_score": 2.0}, {"name": "q2", "score": 3.0, "max_score": 3.0}]
     assert mine["public_tests"] == [{"name": "q1", "passed": True}, {"name": "q2", "passed": True}]
     assert "public_output" not in mine                          # Otter's text about the tests is for teachers
-    assert otter["graded"] == ["lab.ipynb", "lab.ipynb"]
+    assert otter["graded"] == ["lab.ipynb"] * 3                 # once at upload for the points, then both submissions
 
     # Students never receive what the hidden tests are, nor the autograder's log.
     everything_maria_can_ask = maria.get("/api/assignments/1").text + maria.get("/api/assignments").text
@@ -210,6 +224,23 @@ def test_what_the_students_code_makes_otter_say_does_not_reach_them(lab, hub, mo
     row = teacher.get("/api/teach/assignments/1/progress").json()["students"][1]["submission"]
     assert "hidden test square(-3)" in row["public_output"] and "hidden test square(-3)" in row["questions"][1]["output"]
     assert (row["score"], row["questions"][1]["score"]) == (5.0, 3.0)
+
+    # The code can also raise a question's points and make up questions: only the assignment's own
+    # questions count, with their own points (read at upload), and the teacher is told.
+    async def inflated(notebook, autograder, name, gpu):
+        return {"tests": [
+            {"name": "q1", "score": 0, "max_score": 2.0, "visibility": "hidden", "output": ""},
+            {"name": "q2", "score": 50.0, "max_score": 50.0, "visibility": "hidden", "output": ""},
+            {"name": "bonus", "score": 100.0, "max_score": 100.0, "visibility": "hidden", "output": ""},
+        ]}
+
+    monkeypatch.setattr(grading, "grade", inflated)
+    maria.post("/api/assignments/1/submit")
+    mine = maria.get("/api/assignments/1").json()["submission"]
+    assert (mine["status"], mine["score"], mine["max_score"], mine["error"]) == ("graded", 3.0, 5.0, None)
+    assert [(q["name"], q["score"], q["max_score"]) for q in mine["questions"]] == [("q1", 0.0, 2.0), ("q2", 3.0, 3.0)]
+    row = teacher.get("/api/teach/assignments/1/progress").json()["students"][1]["submission"]
+    assert row["score"] == 3.0 and "bonus: not a question" in row["error"] and "q2: reported as out of 50" in row["error"]
 
 
 def test_late_submissions_are_marked(lab, hub, db):
@@ -275,13 +306,32 @@ def test_a_grade_for_an_earlier_notebook_is_dropped(lab, hub, db, otter):
     assert (second.id, second.attempt) == (first.id, 2)
 
     asyncio.run(submissions.grade_submission(first.id, attempt=1))
-    assert otter["graded"] == [] and maria.get("/api/assignments/1").json()["submission"]["status"] == "queued"
+    assert otter["graded"] == ["lab.ipynb"]                     # only the upload's, for the points
+    assert maria.get("/api/assignments/1").json()["submission"]["status"] == "queued"
 
     # After a restart of the backend, what was still waiting is found again and graded.
     assert submissions.waiting_for_the_autograder() == [(first.id, 2)]
     asyncio.run(submissions.grade_submission(first.id, attempt=2))
     assert maria.get("/api/assignments/1").json()["submission"]["score"] == 5.0
     assert submissions.waiting_for_the_autograder() == []
+
+
+def test_an_assignment_uploaded_before_points_were_read_gets_them_when_graded(lab, hub, db, otter):
+    teacher, maria, _ = lab
+    assignment = db.get(Assignment, 1)
+    assignment.question_points = assignment.points = None       # as the migration leaves older assignments
+    db.commit()
+    otter["graded"].clear()
+
+    solve(hub)
+    maria.post("/api/assignments/1/submit")
+    assert otter["graded"] == ["lab.ipynb", "lab.ipynb"]        # the students' version once, then the submission
+    db.expire_all()
+    assert (db.get(Assignment, 1).question_points, db.get(Assignment, 1).points) == ({"q1": 2.0, "q2": 3.0}, 5.0)
+    assert maria.get("/api/assignments/1").json()["submission"]["score"] == 5.0
+
+    maria.post("/api/assignments/1/submit")                    # known from now on
+    assert otter["graded"] == ["lab.ipynb"] * 3
 
 
 # --- grading by hand ------------------------------------------------------------------------------
@@ -371,8 +421,6 @@ def test_students_cannot_reach_submissions_or_grades(lab, hub, db):
 
 def test_reading_otter_notebooks_and_results():
     assert grading.is_otter_master(otter_master()) and not grading.is_otter_master(notebook_file("# ASSIGNMENT CONFIG in a code cell"))
-    assert grading.total_points(student_version()) == 5.0
-    assert grading.total_points(notebook_file()) is None
 
     results = otter_results(2.0, 0)
     assert grading.totals(results) == (2.0, 5.0)
@@ -393,6 +441,25 @@ def test_reading_otter_notebooks_and_results():
     ]}
     assert grading.totals(odd) == (0.0, 5.0)
     assert [q["score"] for q in grading.questions(odd, with_hidden_output=False)] == [0.0, 0.0]
+
+    # ...and checked against the assignment's own questions and points, which the results cannot raise.
+    claimed = {"tests": [
+        {"name": "Public Tests", "visibility": "visible", "status": "passed", "output": "q1 results: All test cases passed!"},
+        {"name": "q1", "score": 2.0, "max_score": 2.0, "output": "q1 passed"},
+        {"name": "q2", "score": 99.0, "max_score": 99.0, "output": "q2 claims 99"},
+        {"name": "q9", "score": 50.0, "max_score": 50.0},
+    ]}
+    results, found = grading.checked(claimed, {"q1": 2.0, "q2": 3.0, "q3": 1.0})
+    assert grading.totals(results) == (5.0, 6.0)
+    assert [(q["name"], q["score"], q["max_score"], q["output"]) for q in grading.questions(results, with_hidden_output=True)] == [
+        ("q1", 2.0, 2.0, "q1 passed"), ("q2", 3.0, 3.0, "q2 claims 99"), ("q3", 0.0, 1.0, ""),
+    ]
+    assert grading.public_output(results) == "q1 results: All test cases passed!"     # still there for the teacher
+    assert found == [
+        "q9: not a question of this assignment", "q2: reported as out of 99 points; it has 3", "q3: missing from the results",
+    ]
+    assert grading.checked(otter_results(2.0, 0), {"q1": 2.0, "q2": 3.0}) == (otter_results(2.0, 0), [])
+    assert grading.checked({}, {"q1": 2.0})[0] == {"tests": [{"name": "q1", "visibility": "hidden", "output": "", "max_score": 2.0, "score": 0.0}]}
 
 
 

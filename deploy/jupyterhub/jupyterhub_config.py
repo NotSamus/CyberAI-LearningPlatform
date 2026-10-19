@@ -61,11 +61,13 @@ c.GenericOAuthenticator.allow_all = True
 
 
 def _hub_admins(authenticator, handler, authentication):
-    """Hub admins are teachers, and platform admins (the `admin` claim from /oauth/userinfo), who see
-    the hub's admin panel inside the platform's Settings page. Decided at hub login: a change on the
-    platform reaches the hub the next time that person's hub session starts."""
+    """Hub admins are the platform's admins only (the `admin` claim from /oauth/userinfo), who see the
+    hub's admin panel under Admin > JupyterHub. Not teachers: JupyterHub's admin role opens every
+    notebook server (other teachers' and admins' too), makes tokens for any user and shuts the hub
+    down, which the platform gives its admins only. Decided at hub login: a change on the platform
+    reaches the hub the next time that person's hub session starts (logging out of the platform ends it)."""
     oauth_user = authentication.get("auth_state", {}).get("oauth_user", {})
-    authentication["admin"] = "teachers" in oauth_user.get("groups", []) or oauth_user.get("admin") is True
+    authentication["admin"] = oauth_user.get("admin") is True
     return authentication
 
 
