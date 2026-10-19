@@ -44,6 +44,9 @@ services:
       GRADER_TOKEN: ${GRADER_TOKEN:?set it in deploy/.env}
       CPU_IMAGE: ${CPU_IMAGE}
       GPU_IMAGE: ${GPU_IMAGE}
+      GRADER_MEMORY: ${GRADER_MEMORY:-2g}         # per grading job
+      GRADER_TIMEOUT: ${GRADER_TIMEOUT:-300}      # seconds per grading job
+      GRADER_PARALLEL: ${GRADER_PARALLEL:-2}      # jobs at once
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # root-equivalent: this service has no database access and no published port
     networks: [grading]           # only the backend can reach it
@@ -74,6 +77,10 @@ services:
       MAX_SESSIONS_PER_GPU: ${MAX_SESSIONS_PER_GPU}
       CPU_IMAGE: ${CPU_IMAGE}
       GPU_IMAGE: ${GPU_IMAGE}
+      CPU_PROFILE_CPUS: ${CPU_PROFILE_CPUS:-1}    # one person's CPU notebook server
+      CPU_PROFILE_MEM: ${CPU_PROFILE_MEM:-2G}
+      GPU_PROFILE_CPUS: ${GPU_PROFILE_CPUS:-4}    # one person's GPU notebook server
+      GPU_PROFILE_MEM: ${GPU_PROFILE_MEM:-12G}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # root-equivalent: keep this container locked down
       - hub-data:/data

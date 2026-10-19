@@ -91,6 +91,30 @@ apart from everything else:
   "could not be graded"; a teacher presses **Run the autograder again** on them once it is back.
   Submissions that were waiting when the backend restarts are picked up again by themselves.
 
+### CPU and memory of notebook servers and grading jobs
+
+Set in `deploy/.env` (the defaults are the values below, also in `.env.example`):
+
+| Setting | Default | What it limits |
+| --- | --- | --- |
+| `CPU_PROFILE_CPUS`, `CPU_PROFILE_MEM` | `1`, `2G` | one person's CPU notebook server |
+| `GPU_PROFILE_CPUS`, `GPU_PROFILE_MEM` | `4`, `12G` | one person's GPU notebook server (the GPU itself: `GPU_IDS`, `MAX_SESSIONS_PER_GPU`) |
+| `GRADER_MEMORY`, `GRADER_TIMEOUT` | `2g`, `300` | one grading job: memory, and seconds before it is stopped |
+| `GRADER_PARALLEL` | `2` | grading jobs at once; the others wait their turn |
+
+- These are caps, not reservations: a server only takes what its kernels use. Raising them does not
+  limit how many people can start a server, but if many use their full amount at once the server runs
+  out of memory. Leave room for the hub, the backend, Postgres and the grading jobs.
+- All of a person's assignments open in one server (one for CPU, one for GPU), and every notebook they
+  open keeps its own kernel running until it is shut down or the server is stopped (idle 30 minutes,
+  or 4 hours old). Memory is what runs out first when someone opens many notebooks.
+- Apply a change with `docker compose up -d jupyterhub grader`. Servers already running keep their old
+  limits until they stop; a student gets the new ones the next time their server starts.
+- The backend waits up to an hour for a grading job, queue included (`GRADER_TIMEOUT` in
+  `api/app/grading.py`). With a long `GRADER_TIMEOUT` and few `GRADER_PARALLEL` slots, a class
+  submitting at once can exceed that; those submissions are marked "could not be graded" and can be
+  run again from the gradebook.
+
 `APP_ORIGIN` in `deploy/.env` must be exactly the address people type to reach the site (for example
 `https://cyberai.utep.edu`, no path). The backend refuses logins and every other change that does not
 come from a page at that address.

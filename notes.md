@@ -467,3 +467,16 @@ merging master into it:
 ### Limits
 - Two assignments with the same title get columns with the same names.
 - In the file of every student, a published assignment given to nobody is still there, as empty columns.
+
+## CPU and memory limits in deploy/.env (2026-10-19)
+- Notebook servers and grading jobs take their limits from `deploy/.env` now, with the old values as
+  defaults: `CPU_PROFILE_CPUS`/`CPU_PROFILE_MEM` (1, 2G), `GPU_PROFILE_CPUS`/`GPU_PROFILE_MEM` (4, 12G),
+  `GRADER_MEMORY` (2g), `GRADER_TIMEOUT` (300 s), `GRADER_PARALLEL` (2). Read in
+  `deploy/jupyterhub/jupyterhub_config.py` (PROFILES) and `grader/main.py`; passed in `deploy/docker-compose.yml`.
+  A server whose `deploy/.env` has none of them keeps today's limits.
+- Caps, not reservations. One person's assignments all share one CPU server, and each open notebook
+  keeps its kernel until shut down, so memory runs out first. Nothing stops idle kernels yet (only the
+  hub's 30-minute idle / 4-hour culler stops whole servers).
+- Apply: `docker compose up -d jupyterhub grader`; running servers keep old limits until they restart.
+- Checked: hub config compiles, PROFILES picks up overrides and treats empty values as defaults,
+  `docker compose config` renders with and without the new lines. Not tried on a running hub.
