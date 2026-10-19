@@ -46,3 +46,18 @@ export function dueText(iso: string): string {
   if (days > 1 && days < 7) return `${due.toLocaleDateString(undefined, { weekday: "long" })}, ${time}`;
   return formatDue(iso);
 }
+
+// A day as "2026-10-19", in the viewer's own time zone: the same for every time on that day.
+export function dayKey(date: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+}
+
+// Which day of its year a date is (January 1 is day 1), and how many days that year has.
+export function dayOfYear(date: Date): number {
+  return Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 1)) / 86_400_000) + 1;
+}
+
+export function daysInYear(year: number): number {
+  return dayOfYear(new Date(year, 11, 31));
+}

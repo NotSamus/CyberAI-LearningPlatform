@@ -157,6 +157,8 @@
 :root[data-theme="retro"] :is(input, select, textarea):disabled { background: var(--card); }
 :root[data-theme="retro"] :is(.list, .table-scroll, .table-box) { background: hsl(0, 0%, 100%); box-shadow: var(--bevel-field); }
 :root[data-theme="retro"] th { background: var(--card); color: var(--text); box-shadow: var(--bevel-out); }
+:root[data-theme="retro"] table.month th { background: transparent; box-shadow: none; }      /* the calendar's days of the week are not column buttons */
+:root[data-theme="retro"] .side-box { border: 0; box-shadow: var(--bevel-out); }      /* Home's calendar and timeline: small windows, as the lesson list is */
 /* Dialogs and menus: windows too */
 :root[data-theme="retro"] dialog.dialog { border: 0; }
 :root[data-theme="retro"] dialog.dialog::backdrop { background: hsla(0, 0%, 0%, 0.25); }

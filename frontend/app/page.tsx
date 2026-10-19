@@ -7,18 +7,22 @@ import PageHeader from "@/components/PageHeader";
 import Announcements from "@/components/learn/Announcements";
 import CourseSection from "@/components/learn/CourseSection";
 import DueSoon from "@/components/learn/DueSoon";
+import HomeSide from "@/components/learn/HomeSide";
 import TeachStrip from "@/components/learn/TeachStrip";
 import UpNext, { SHOWN, whatIsNext } from "@/components/learn/UpNext";
 import { byCourse } from "@/components/learn/courses";
 import { api, type Announcement, type MyAssignment } from "@/lib/api";
 import type { MyLesson } from "@/lib/lessons";
 import { useMe } from "@/lib/useMe";
+import { useToday } from "@/lib/useToday";
 
 // Home. For a student: what to do next, what is due, the announcements, and then every lesson and
 // assignment they have, course by course. For a teacher: the same lists as their students see
-// them, drafts included, under a line about what waits for them in Teach.
+// them, drafts included, under a line about what waits for them in Teach. Beside the lists, on the
+// right: the calendar of this year and the timeline of what is due.
 export default function Home() {
   const me = useMe();
+  const today = useToday();
   const [lessons, setLessons] = useState<MyLesson[] | null>(null);
   const [items, setItems] = useState<MyAssignment[] | null>(null);
   const [news, setNews] = useState<Announcement[]>([]);
@@ -65,30 +69,35 @@ export default function Home() {
       {error && <p className="error" role="alert">Could not load this page: {error}</p>}
       {(!loaded || !known) && !error && <p className="muted">Loading…</p>}
 
-      {loaded && known && empty && (
-        teacher ? (
-          <EmptyState
-            icon={BookOpen} title="Nothing here yet"
-            action={<>
-              <Link href="/teach/lessons" className="button">Write a lesson</Link>
-              <Link href="/teach/assignments/new" className="button secondary">Upload a notebook</Link>
-            </>}
-          >
-            Lessons you write and notebooks you upload show up here, the way your students will see them.
-          </EmptyState>
-        ) : (
-          <EmptyState icon={BookOpen} title="Nothing here yet">
-            Nothing has been given to you yet. New lessons and assignments will show up here.
-          </EmptyState>
-        )
-      )}
+      <div className="home-layout">
+        <div className="home-main">
+          {loaded && known && empty && (
+            teacher ? (
+              <EmptyState
+                icon={BookOpen} title="Nothing here yet"
+                action={<>
+                  <Link href="/teach/lessons" className="button">Write a lesson</Link>
+                  <Link href="/teach/assignments/new" className="button secondary">Upload a notebook</Link>
+                </>}
+              >
+                Lessons you write and notebooks you upload show up here, the way your students will see them.
+              </EmptyState>
+            ) : (
+              <EmptyState icon={BookOpen} title="Nothing here yet">
+                Nothing has been given to you yet. New lessons and assignments will show up here.
+              </EmptyState>
+            )
+          )}
 
-      {loaded && known && !empty && !teacher && <UpNext lessons={lessons} assignments={items} />}
-      {loaded && known && !empty && <DueSoon assignments={items} asTeacher={teacher} shown={upNext} />}
-      <Announcements items={news} />
-      {loaded && known && byCourse(lessons, items).map((group) => (
-        <CourseSection key={group.id ?? "everyone"} group={group} asTeacher={teacher} />
-      ))}
+          {loaded && known && !empty && !teacher && <UpNext lessons={lessons} assignments={items} />}
+          {loaded && known && !empty && <DueSoon assignments={items} asTeacher={teacher} shown={upNext} />}
+          <Announcements items={news} />
+          {loaded && known && byCourse(lessons, items).map((group) => (
+            <CourseSection key={group.id ?? "everyone"} group={group} asTeacher={teacher} />
+          ))}
+        </div>
+        {loaded && known && today && <HomeSide today={today} assignments={items} asTeacher={teacher} />}
+      </div>
     </main>
   );
 }

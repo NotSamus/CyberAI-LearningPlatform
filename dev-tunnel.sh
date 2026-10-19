@@ -18,7 +18,7 @@ if [ $# -ne 1 ]; then
 fi
 SERVER="$1"
 REMOTE_DIR="${REMOTE_DIR:-CyberAI-LearningPlatform}"
-CONDA_ENV="${CONDA_ENV:-CyberP}"
+CONDA_ENV="${CONDA_ENV:-llm}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 HUB_PORT=8081                       # fixed in dev.sh and deploy/docker-compose.dev.yml
 

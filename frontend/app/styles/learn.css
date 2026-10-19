@@ -29,9 +29,9 @@
 }
 
 /* --- Home --------------------------------------------------------------------------------------- */
-.home > section { margin-top: var(--s7); }
-.home > .page-header + section { margin-top: 0; }
-.home > section > h2 { margin: 0 0 var(--s3); }
+.home-main > section { margin-top: var(--s7); }
+.home-main > section:first-child { margin-top: 0; }
+.home-main > section > h2 { margin: 0 0 var(--s3); }
 /* For teachers, above everything: what waits for them in Teach */
 .teach-strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s5); margin-bottom: var(--s5); padding: var(--s3) var(--s4); background: var(--card); color: var(--text); border: 1px solid var(--edge); border-left: 4px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow-1); text-decoration: none; }
 .teach-strip:hover { box-shadow: var(--shadow-2); }
@@ -61,6 +61,74 @@
 .course-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); margin-bottom: var(--s3); }
 .course-head .progress { width: var(--w-menu); margin-left: auto; }
 .course-head h2 { margin: 0; font-size: var(--t-xl); }
+
+/* The calendar and the timeline: a column to the right of the lists, which then sit left of the
+   middle of the screen. The page is as much wider as that column, so the lists keep their width. */
+.page.home { max-width: calc(var(--w-page) + var(--w-rail) + var(--s6)); }
+.home-layout { display: grid; grid-template-columns: minmax(0, 1fr) var(--w-rail); align-items: start; gap: var(--s6); }
+/* It stays in view while the lists scroll; when it is taller than the window, the timeline scrolls inside it. */
+.home-side { position: sticky; top: var(--s5); display: flex; flex-direction: column; gap: var(--s5); max-height: calc(100vh - 2 * var(--s5)); }
+/* Quieter than the lists, so that they come first: no card and no shadow, only a thin line on the
+   page, and no text in it larger than the lists' headings */
+.side-box { padding: var(--s4); border: 1px solid var(--border); border-radius: var(--radius); }
+.side-box h2 { margin: 0; }
+/* The calendar: today and how far into the year it is, then a month at a time */
+.calendar { display: grid; flex: none; gap: var(--s3); }
+.calendar .today { display: grid; gap: var(--s1); padding-bottom: var(--s3); border-bottom: 1px solid var(--border); }
+.calendar .today > p { margin: 0; }
+.calendar .today-date { font-weight: var(--bold); }
+.calendar .progress { width: 100%; }
+.month-bar { display: flex; align-items: center; gap: var(--s1); }
+.month-bar h2 { flex: 1; font-size: var(--t-base); text-align: center; }
+table.month { table-layout: fixed; }
+table.month :is(th, td) { padding: 0; border: 0; text-align: center; }
+table.month th { padding-bottom: var(--s1); }
+table.month abbr { text-decoration: none; }
+table.month td > :is(a, span) { position: relative; display: inline-grid; place-items: center; width: var(--s6); height: var(--s6); color: var(--text); border-radius: var(--pill); font-variant-numeric: tabular-nums; text-decoration: none; }
+table.month td.past > :is(a, span) { color: var(--muted); }      /* the days of the year gone by */
+table.month td > a:hover { background: var(--tint); }
+table.month td.is-today > :is(a, span) { background: var(--accent); color: var(--accent-text); font-weight: var(--bold); }
+table.month td.is-today > a:hover { background: var(--accent-hover); }
+/* A day something is due: a dot under its number, in the tone of the timeline's mark for that day */
+table.month .dot { position: absolute; bottom: 2px; width: var(--s1); height: var(--s1); background: var(--accent); border-radius: var(--pill); }
+table.month .dot.good { background: var(--gpu); }
+table.month .dot.warn { background: var(--warn); }
+table.month .dot.bad { background: var(--error); }
+table.month .dot.neutral { background: var(--border-strong); }
+table.month td.is-today .dot { background: var(--accent-text); }
+.calendar .text-button { justify-self: center; }
+/* The timeline: a line down the left, a mark on it for each day, what is due under the day */
+.timeline-box { display: flex; flex-direction: column; gap: var(--s3); min-height: 0; }
+.timeline-box > p { margin: 0; font-size: var(--t-sm); }
+.timeline { position: relative; display: grid; gap: var(--s4); min-height: 0; margin: 0; padding: 0; overflow-y: auto; list-style: none; }      /* positioned: its days' offsetTop is from its top */
+.tl-day { position: relative; padding-left: var(--s5); border-radius: var(--radius-small); }
+.tl-day::before { content: ""; position: absolute; top: var(--s4); bottom: calc(-1 * var(--s4)); left: 5px; width: 2px; background: var(--border); }
+.tl-day:last-child::before { display: none; }
+.tl-day::after { content: ""; position: absolute; top: var(--s1); left: 0; width: var(--s3); height: var(--s3); background: var(--card); border: 2px solid var(--accent); border-radius: var(--pill); }
+.tl-day.warn::after { border-color: var(--warn); }
+.tl-day.bad::after { background: var(--error); border-color: var(--error); }
+.tl-day.good::after { background: var(--gpu); border-color: var(--gpu); }
+.tl-day.neutral::after { border-color: var(--border-strong); }
+.tl-day:is(.picked, :target) { background: var(--accent-tint); }      /* the day clicked in the calendar */
+.tl-day:focus { outline: none; }
+.tl-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tl-when { margin: 0; font-size: var(--t-sm); font-weight: var(--bold); }
+.tl-day.bad .tl-when { color: var(--error); }
+.tl-day ul { display: grid; gap: var(--s3); margin: var(--s2) 0 0; padding: 0; list-style: none; }
+.tl-day li { display: grid; justify-items: start; gap: var(--s1); min-width: 0; }
+.tl-day a.title { color: var(--text); font-size: var(--t-sm); font-weight: var(--bold); text-decoration: none; overflow-wrap: anywhere; }
+.tl-day a.title:hover { color: var(--accent); }
+.tl-day .meta { gap: 0 var(--s3); }
+.tl-day .meta, .tl-day .fact { font-size: var(--t-xs); }
+.tl-day .fact svg.lucide { width: var(--icon-xs); height: var(--icon-xs); }
+@media (max-width: 1023px) {
+  /* An iPad held upright: no room beside the lists, so the calendar and the timeline stand side by
+     side above them. The timeline is as tall as the calendar, and scrolls. */
+  .home-layout { grid-template-columns: minmax(0, 1fr); }
+  .home-side { order: -1; position: static; flex-direction: row; max-height: none; }
+  .home-side > * { flex: 1; min-width: 0; }
+  .timeline-box { contain: size; }
+}
 
 /* --- A notebook assignment, before it is opened -------------------------------------------------- */
 .assignment { max-width: var(--w-text); }

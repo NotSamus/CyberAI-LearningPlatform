@@ -297,3 +297,41 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - Code colours: `lowlight` 3.3.0 and `rehype-highlight` 7.0.2 (exact versions), `frontend/lib/highlight.ts`;
   colours per theme in `learn.css` / `themes.css`.
 
+
+## Calendar and timeline on Home (2026-10-19)
+- Home has a column on the right: a calendar of this year and a timeline of what is due. The lists
+  moved left of the middle of the screen to make room (the page is as much wider as the column).
+- Calendar (`components/learn/Calendar.tsx`): today's date, "Day 292 of 365" with a bar, and one
+  month at a time, January to December of this year only (arrows, "Back to today"). Today is a filled
+  circle, the days of the year gone by are grey, and a day something is due has a dot: red overdue,
+  yellow less than two days left, green handed in, blue otherwise (grey: a draft, for teachers).
+  Clicking a marked day scrolls the timeline to it; the page itself does not move.
+- Timeline (`components/learn/Timeline.tsx`): for a student, what is overdue and not handed in (at
+  the top), then every assignment still to come, by day ("Today", "Tomorrow", "Fri, Oct 23"), with
+  the time, the course and "Submitted" or the score. For a teacher: what is still to come, drafts
+  marked. Only assignments have dates, so lessons are never in it.
+- The day moves on by itself at midnight, and when the tab is come back to (`lib/useToday.ts`).
+  Today is only worked out in the browser: the server may be in another time zone or day.
+- iPad held upright (below 1024 px): the calendar and the timeline stand side by side above Up next,
+  the timeline as tall as the calendar and scrolling. 1024 px and wider: the column on the right,
+  staying in view while the lists scroll.
+- The column is 256 px at every width, also on 1080p screens: it was tried at 320 and 384 px, but
+  320 is off the spacing scale and the timeline needed no more room (at 256 only a long title wraps).
+  The space left on wide screens stays empty, as "Refactoring UI" says (use the width the content needs).
+- It is kept quieter than the lists, so they come first: no card and no shadow, only a thin line on
+  the page; "Timeline" is a small grey label, and today's date is no larger than body text. 24 px
+  between the calendar and the timeline. In Retro 95 both are small grey windows.
+- Frontend only: no server or database change. On the UTEP server: `git pull`, `docker compose up -d --build`.
+
+### Checked
+- In the dev browser at 768, 1024 and 1440 px, light and dark, and in Halloween and Retro 95, with
+  made-up assignments fed to the page (overdue, today, tomorrow, two on one day, handed in, a draft,
+  no due date): as a student and as a teacher. The production build passes; tsc and ESLint are clean.
+
+### Not verified
+- With real accounts and real due dates (the dev database has no assignment with a due date).
+- On a real iPad, and the midnight change of day (only the code that does it was read).
+
+### Open question
+- "Due soon" and the timeline now show much the same assignments. Due soon could go, or the
+  timeline could leave out what Up next lists.
