@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
+import ExportMenu from "@/components/teach/ExportMenu";
 import StudentPicker from "@/components/teach/StudentPicker";
 import { useCoursePage } from "@/components/teach/context";
 import { api, type Student } from "@/lib/api";
 import { JSON_HEADERS, message } from "@/lib/errors";
 
 // Who is in a course. Everything given to the course reaches these students, including what was
-// given before they were added.
+// given before they were added. Export: their progress and grades in this course, as a file.
 export default function CourseStudents() {
   const { course, reload } = useCoursePage();
   const [students, setStudents] = useState<Student[] | null>(null);
@@ -41,10 +42,13 @@ export default function CourseStudents() {
   const unsaved = [...chosen].sort().join() !== [...course.student_ids].sort().join();
   return (
     <form className="card members" onSubmit={save}>
-      <p className="muted">
-        Its students get every lesson, assignment and announcement given to this course, including those given
-        before they were added.
-      </p>
+      <div className="row members-head">
+        <p className="muted">
+          Its students get every lesson, assignment and announcement given to this course, including those given
+          before they were added.
+        </p>
+        <ExportMenu path={`/teach/courses/${course.id}/students`} label={`Export the students of ${course.name}`} />
+      </div>
       <StudentPicker students={students} chosen={chosen} onChange={(ids) => { setChosen(ids); setSaved(false); }} />
       <div className="row">
         <button type="submit" disabled={busy || !unsaved}>{busy ? "Saving…" : "Save students"}</button>

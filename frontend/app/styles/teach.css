@@ -132,6 +132,8 @@ td.more, td.end { width: 1%; text-align: right; }
 }
 form.members { display: grid; gap: var(--s4); height: auto; max-width: var(--w-page); }
 form.members > p { margin: 0; }
+.members-head { display: flex; align-items: flex-start; gap: var(--s3); }
+.members-head > p { flex: 1; margin: 0; }
 
 iframe.hub-admin { width: 100%; height: 640px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
 
