@@ -123,17 +123,19 @@ FAKE_GPU = os.environ.get("DEV_FAKE_GPU", "") == "1"
 GPU_IDS = [g for g in os.environ.get("GPU_IDS", "0").split(",") if g]
 MAX_SESSIONS_PER_GPU = int(os.environ.get("MAX_SESSIONS_PER_GPU", "4"))
 
+# What one person's notebook server may use, per server (deploy/.env). Caps, not reservations: a
+# server takes what its kernels use, up to these. A change applies to servers started afterwards.
 PROFILES = {
     "cpu": {
         "image": os.environ.get("CPU_IMAGE", "cyberai/notebook-cpu:latest"),
-        "cpu_limit": 1.0,
-        "mem_limit": "2G",
+        "cpu_limit": float(os.environ.get("CPU_PROFILE_CPUS") or 1.0),
+        "mem_limit": os.environ.get("CPU_PROFILE_MEM") or "2G",
         "gpu": False,
     },
     "gpu": {
         "image": os.environ.get("GPU_IMAGE", "cyberai/notebook-gpu:latest"),
-        "cpu_limit": 4.0,
-        "mem_limit": os.environ.get("GPU_PROFILE_MEM", "12G"),
+        "cpu_limit": float(os.environ.get("GPU_PROFILE_CPUS") or 4.0),
+        "mem_limit": os.environ.get("GPU_PROFILE_MEM") or "12G",
         "gpu": True,
     },
 }

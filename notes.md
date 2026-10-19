@@ -356,3 +356,18 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
   shows the new password once; your own row's New password is greyed out.
 - Not verified: against the real backend in a browser (no admin password at hand; the API is covered
   by the tests). On the server: `git pull`, `docker compose up -d --build` (no migration).
+
+## CPU and memory limits in deploy/.env (2026-10-19)
+- Notebook servers and grading jobs take their limits from `deploy/.env` now, with the old values as
+  defaults: `CPU_PROFILE_CPUS`/`CPU_PROFILE_MEM` (1, 2G), `GPU_PROFILE_CPUS`/`GPU_PROFILE_MEM` (4, 12G),
+  `GRADER_MEMORY` (2g), `GRADER_TIMEOUT` (300 s), `GRADER_PARALLEL` (2). Read in
+  `deploy/jupyterhub/jupyterhub_config.py` (PROFILES) and `grader/main.py`; passed in `deploy/docker-compose.yml`.
+  A server whose `deploy/.env` has none of them keeps today's limits.
+- Caps, not reservations. One person's assignments all share one CPU server, and each open notebook
+  keeps its kernel until shut down, so memory runs out first. Nothing stops idle kernels yet (only the
+  hub's 30-minute idle / 4-hour culler stops whole servers).
+- Apply: `docker compose up -d jupyterhub grader`; running servers keep old limits until they restart.
+- Checked: hub config compiles, PROFILES picks up overrides and treats empty values as defaults,
+  `docker compose config` renders with and without the new lines. Not tried on a running hub.
+- Branch `claude/env-limits` (worktree `.claude/worktrees/env-limits`), not committed. Merges cleanly
+  with the usernames-only, admin-rights and student-export branches, except notes.md (keep both sections).
