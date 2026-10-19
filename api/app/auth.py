@@ -43,6 +43,9 @@ MAX_PASSWORD_LENGTH = 256                   # hashing a huge "password" would ti
 
 MAX_LOGIN_ATTEMPTS = 5                      # failed logins for one username from one address...
 LOGIN_ATTEMPT_WINDOW = 15 * 60              # ...within this many seconds, before further ones are refused
+# Every password typed again by someone already logged in (My account, an admin's new password, admin
+# rights) counts against one limit, so a browser taken over gets 5 guesses in all, not 5 per page.
+REAUTH = "reauth"
 
 _hasher = PasswordHasher()                  # argon2id with the library's recommended parameters
 _DUMMY_HASH = _hasher.hash("unused")        # so a login for an unknown username takes as long as a real one
@@ -242,7 +245,7 @@ def change_password(body: PasswordChange, request: Request, response: Response, 
     user = user_for_session(db, token) if token else None
     if user is None:
         raise HTTPException(401, "not logged in")
-    confirm_password(db, request, user.username, body.current_password, "password-change", "The current password is wrong.")
+    confirm_password(db, request, user.username, body.current_password, REAUTH, "The current password is wrong.")
     try:
         set_password(db, user, body.new_password)
     except AccountError as e:

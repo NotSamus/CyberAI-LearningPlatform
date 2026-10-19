@@ -113,9 +113,10 @@ After that, an admin manages accounts in the site, under **Admin** (top bar) > *
 - **Edit**: the name and whether the account may use GPU notebooks. The username and the role are fixed
   (the account's notebook files are stored under a name made from its role and number).
 - **New password** (in the row's ⋯ menu), for someone who forgot theirs: again generated and shown once,
-  and the account is logged out everywhere. For another admin's account the site first asks for your own
-  password (guesses are limited like logins), so a browser left logged in cannot lock the other admins
-  out. Your own password is changed under **My account**, not here.
+  and the account is logged out everywhere, its running notebooks and JupyterHub login included (its
+  files stay). For another admin's account the site first asks for your own password (guesses are
+  limited like logins), so a browser left logged in cannot lock the other admins out, and the backend
+  logs who did it. Your own password is changed under **My account**, not here.
 - **Remove** (in the ⋯ menu): deletes the account with its submissions and grades, stops its notebook servers and ends
   its JupyterHub login. The files in its notebook home stay on the server.
 
@@ -346,8 +347,8 @@ may show in a frame (`frontend/next.config.ts`).
 
 After 5 wrong passwords for one username from one network address, further logins for that username from
 that address are refused for 15 minutes (`MAX_LOGIN_ATTEMPTS` in `api/app/auth.py`). `test/api/test_security.py`
-attacks the login and the admin API: password guessing (also of the current password when changing it,
-and of an admin's own password when giving or taking admin rights),
+attacks the login and the admin API: password guessing (also of a password typed again when already
+logged in: My account, another admin's new password, admin rights, which share one limit of 5),
 SQL injection, forged and planted cookies, oversized input, requests sent from other websites, and a
 student asking for admin data or trying to create, change or remove accounts. `test_assignments.py`,
 `test_courses.py` and `test_grading.py` do the same for the teacher API: students trying to upload,

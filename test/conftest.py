@@ -12,6 +12,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+import httpx
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
@@ -89,6 +90,16 @@ def notebook_file(*cells: str) -> bytes:
 def no_leftover_login_attempts():
     """The login attempt counters live in memory: start every test with none."""
     auth._attempts.clear()
+
+
+@pytest.fixture(autouse=True)
+def no_real_hub(monkeypatch):
+    """No test reaches a real JupyterHub: on a developer's computer the dev hub listens at the default
+    address with the default token. A hub call a test has not faked fails as if the hub were down."""
+    def unreachable(request):
+        raise httpx.ConnectError("the tests never reach a real JupyterHub", request=request)
+
+    monkeypatch.setattr(hub_client, "_transport", httpx.MockTransport(unreachable))
 
 
 @pytest.fixture(scope="session")

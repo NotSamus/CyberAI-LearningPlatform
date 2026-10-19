@@ -5,12 +5,12 @@ import Chip from "@/components/Chip";
 import Dialog from "@/components/Dialog";
 import Menu from "@/components/Menu";
 import PageHeader from "@/components/PageHeader";
-import { api, type Account, type NewAccount } from "@/lib/api";
+import { api, type Account, type NewAccount, type NewPassword } from "@/lib/api";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import { useMe } from "@/lib/useMe";
 
 // A password the server has just made, shown once: when an account is added, or given a new password.
-type Shown = { username: string; password: string; created: boolean };
+type Shown = { username: string; password: string; created: boolean; notice?: string };
 
 export default function AccountsPage() {
   // The server decides who is an admin: /api/admin/users answers 403 for everyone else, and this
@@ -35,12 +35,12 @@ export default function AccountsPage() {
       setResetting(a);
       return;
     }
-    const sure = window.confirm(`Give ${a.name} (${a.username}) a new password? They are logged out everywhere, and their current password stops working.`);
+    const sure = window.confirm(`Give ${a.name} (${a.username}) a new password? They are logged out everywhere, their notebooks are stopped, and their current password stops working.`);
     if (!sure) return;
     setError("");
     try {
-      const account = await api<NewAccount>(`/admin/users/${a.id}/reset-password`, { method: "POST" });
-      setShown({ username: account.username, password: account.password, created: false });
+      const account = await api<NewPassword>(`/admin/users/${a.id}/reset-password`, { method: "POST" });
+      setShown({ username: account.username, password: account.password, created: false, notice: account.notice });
       load();
     } catch (e) {
       setError(message(e));
@@ -144,7 +144,7 @@ export default function AccountsPage() {
       {resetting && (
         <AdminPasswordDialog
           account={resetting} onClose={() => setResetting(null)}
-          onReset={(account) => { setResetting(null); setShown({ username: account.username, password: account.password, created: false }); load(); }}
+          onReset={(account) => { setResetting(null); setShown({ username: account.username, password: account.password, created: false, notice: account.notice }); load(); }}
         />
       )}
       <PasswordDialog shown={shown} onDone={() => setShown(null)} />
@@ -166,6 +166,7 @@ function PasswordDialog({ shown, onDone }: { shown: Shown | null; onDone: () => 
             Give it to them now: it is not stored and will not be shown again. They can change it under My account,
             in the menu under their name.
           </p>
+          {shown?.notice && <p className="error" role="alert">{shown.notice}</p>}
         </div>
         <div className="dialog-foot">
           <button type="submit" autoFocus>I have noted it</button>
@@ -177,7 +178,7 @@ function PasswordDialog({ shown, onDone }: { shown: Shown | null; onDone: () => 
 
 // A new password for another admin. The server asks for your own password first, so that a browser
 // left logged in cannot lock the other admins out (api/app/admin.py).
-function AdminPasswordDialog({ account, onClose, onReset }: { account: Account; onClose: () => void; onReset: (account: NewAccount) => void }) {
+function AdminPasswordDialog({ account, onClose, onReset }: { account: Account; onClose: () => void; onReset: (account: NewPassword) => void }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -187,7 +188,7 @@ function AdminPasswordDialog({ account, onClose, onReset }: { account: Account; 
     setBusy(true);
     setError("");
     try {
-      onReset(await api<NewAccount>(`/admin/users/${account.id}/reset-password`, {
+      onReset(await api<NewPassword>(`/admin/users/${account.id}/reset-password`, {
         method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ your_password: password }),
       }));
     } catch (e) {
@@ -201,7 +202,7 @@ function AdminPasswordDialog({ account, onClose, onReset }: { account: Account; 
       <form onSubmit={submit}>
         <div className="dialog-body">
           <p>
-            {account.name} is an admin. They are logged out everywhere, and their current password stops working.
+            {account.name} is an admin. They are logged out everywhere, their notebooks are stopped, and their current password stops working.
           </p>
           <label>
             Your own password

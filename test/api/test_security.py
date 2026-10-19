@@ -2,6 +2,8 @@
 
 Each test does what an attacker would do and checks that the server refuses it.
 """
+import logging
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -337,6 +339,7 @@ def test_admin_edits_resets_and_removes_accounts(client, db, no_hub):
     assert maria.get("/api/me").status_code == 401               # logged out everywhere
     assert login(TestClient(app), "maria").status_code == 401 and login(maria, "maria", password).status_code == 200
     assert "argon2" not in r.text
+    assert no_hub == ["s-2"]                                     # and her notebooks were stopped
 
     # Admins are not removed from the browser, neither another admin nor yourself; your own new
     # password is not made here either (My account asks for the current one).
@@ -346,7 +349,7 @@ def test_admin_edits_resets_and_removes_accounts(client, db, no_hub):
     assert login(TestClient(app), "boss").status_code == 200 and login(TestClient(app), "chief").status_code == 200
 
     assert client.delete("/api/admin/users/2").json() == {"deleted": True}
-    assert no_hub == ["s-2"]                                     # their notebook servers and hub login went too
+    assert no_hub == ["s-2", "s-2"]                              # their notebook servers and hub login went too
     assert maria.get("/api/me").status_code == 401 and login(TestClient(app), "maria", password).status_code == 401
     assert client.delete("/api/admin/users/2").status_code == 404
     assert [u["username"] for u in client.get("/api/admin/users").json()] == ["boss", "chief"]
@@ -394,13 +397,58 @@ def test_an_account_is_not_removed_while_the_hub_is_unreachable(client, db, monk
     assert login(TestClient(app), "maria").status_code == 200
 
 
+def test_every_password_typed_again_shares_one_guess_limit(client, db):
+    # A stolen admin session gets 5 guesses at that admin's password in all, not 5 on each page that asks for it.
+    auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
+    auth.create_user(db, "chief", PASSWORD, role="teacher", is_admin=True)
+    auth.create_user(db, "teach", PASSWORD, role="teacher")
+    login(client, "boss")
+    for guess in range(3):
+        assert client.post("/api/admin/users/2/reset-password", json={"your_password": f"guess {guess}"}).status_code == 400
+    for guess in range(3, 5):
+        assert client.post("/api/auth/password", json={"current_password": f"guess {guess}", "new_password": "taken over now"}).status_code == 400
+    assert client.post("/api/admin/users/2/reset-password", json={"your_password": PASSWORD}).status_code == 429
+    assert client.post("/api/auth/password", json={"current_password": PASSWORD, "new_password": "taken over now"}).status_code == 429
+    assert client.put("/api/admin/users/3/admin", json={"admin": True, "your_password": PASSWORD}).status_code == 429
+    assert login(TestClient(app), "boss").status_code == 200 and login(TestClient(app), "chief").status_code == 200
+
+
+def test_a_new_password_ends_the_notebook_login_and_an_admins_is_logged(client, db, no_hub, caplog):
+    auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
+    auth.create_user(db, "maria", PASSWORD)
+    auth.create_user(db, "chief", PASSWORD, role="teacher", is_admin=True)
+    login(client, "boss")
+    caplog.set_level(logging.WARNING, logger="app.admin")
+
+    def logged():
+        return [record.getMessage() for record in caplog.records if record.name == "app.admin"]
+
+    assert client.post("/api/admin/users/2/reset-password").status_code == 200
+    assert no_hub == ["s-2"] and logged() == []                   # her notebooks stopped; a student's reset is routine
+    r = client.post("/api/admin/users/3/reset-password", json={"your_password": PASSWORD})
+    assert r.status_code == 200 and "notice" not in r.json()
+    assert no_hub == ["s-2", "t-3"]
+    assert logged() == ["Admin boss gave the admin chief a new password"]
+
+
+def test_a_new_password_is_given_while_the_hub_is_unreachable(client, db):
+    # Getting back into a locked-out account must not wait for the notebook service (the tests' stand-in
+    # for an unreachable hub is in conftest.py). The admin is told that open notebooks stay open.
+    auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
+    auth.create_user(db, "maria", PASSWORD)
+    login(client, "boss")
+    r = client.post("/api/admin/users/2/reset-password")
+    assert r.status_code == 200 and "could not be reached" in r.json()["notice"]
+    assert login(TestClient(app), "maria", r.json()["password"]).status_code == 200
+
+
 # --- admin rights from the site -------------------------------------------------------------------
 
 def set_admin(client, user_id, admin=True, your_password=PASSWORD):
     return client.put(f"/api/admin/users/{user_id}/admin", json={"admin": admin, "your_password": your_password})
 
 
-def test_an_admin_makes_a_teacher_an_admin(client, db):
+def test_an_admin_makes_a_teacher_an_admin(client, db, caplog):
     auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
     auth.create_user(db, "teach", PASSWORD, role="teacher")
     auth.create_user(db, "maria", PASSWORD)
@@ -437,6 +485,7 @@ def test_an_admin_makes_a_teacher_an_admin(client, db):
     assert teach.post("/api/admin/users", json={"username": "jose"}).status_code == 201
     assert maria.get("/api/admin/users").status_code == 403
     assert set_admin(client, 2).status_code == 200               # already one: nothing changes
+    assert [r.getMessage() for r in caplog.records if r.name == "app.admin"] == ["Admin boss made an admin: teach"] * 2
 
 
 def test_guessing_your_password_to_change_admin_rights_is_cut_off(client, db):

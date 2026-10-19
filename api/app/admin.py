@@ -3,6 +3,7 @@
 Every route checks the account's admin flag here, on the server, for each request. What the
 frontend shows or hides is only a convenience and is never what protects this data.
 """
+import logging
 import secrets
 
 import httpx
@@ -19,6 +20,7 @@ from app.jupyter.deps import PlatformUser, get_current_user_optional
 from app.models import User
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+log = logging.getLogger(__name__)
 
 
 def require_admin(user: PlatformUser | None = Depends(get_current_user_optional)) -> PlatformUser:
@@ -104,26 +106,42 @@ class PasswordReset(BaseModel):
 
 
 @router.post("/users/{user_id}/reset-password")
-def reset_password(
+async def reset_password(
     user_id: int, request: Request, body: PasswordReset | None = None,
     admin: PlatformUser = Depends(require_admin), db: Session = Depends(get_db),
 ):
     """For someone who forgot their password: a new one is generated and returned once, and the
-    account is logged out everywhere. Another admin's account too, but only once the acting admin has
-    typed their own password again, so that a browser left logged in (or a login taken from it) cannot
-    lock every other admin out. Your own password is changed under My account, which asks for the
-    current one, or on the server (app/manage.py)."""
-    user = _user_or_404(db, user_id)
+    account is logged out everywhere: its platform sessions, and its notebook servers and hub login
+    (its files stay; the hub account is made again when a notebook is next opened). Another admin's
+    account too, but only once the acting admin has typed their own password again, so that a browser
+    left logged in (or a login taken from it) cannot lock every other admin out; that reset is logged.
+    Your own password is changed under My account, which asks for the current one, or on the server
+    (app/manage.py)."""
+    user = await run_in_threadpool(_user_or_404, db, user_id)
     if user.id == admin.id:
         raise HTTPException(403, "Change your own password under My account.")
-    if user.is_admin:
-        auth.confirm_password(
-            db, request, admin.username, body.your_password if body else "", "admin-password-reset",
-            "Your password is wrong, so the admin's password was not changed.",
-        )
     password = _new_password()
-    auth.set_password(db, user, password)
-    return {**_account(user), "password": password}
+
+    def reset() -> dict:
+        if user.is_admin:
+            auth.confirm_password(
+                db, request, admin.username, body.your_password if body else "", auth.REAUTH,
+                "Your password is wrong, so the admin's password was not changed.",
+            )
+        auth.set_password(db, user, password)
+        if user.is_admin:
+            log.warning("Admin %s gave the admin %s a new password", admin.username, user.username)
+        return {**_account(user), "password": password}
+
+    answer = await run_in_threadpool(reset)
+    # A notebook someone else had open on this account ends too. If the hub cannot be reached the
+    # password is still the new one (getting back into a locked-out account must not wait for it).
+    try:
+        await hub_client.delete_user(answer["hub_username"])
+    except httpx.HTTPError:
+        answer["notice"] = ("The notebook service could not be reached, so a notebook that is open on this account "
+                            "stays open until it is stopped in the JupyterHub section.")
+    return answer
 
 
 @router.delete("/users/{user_id}")
@@ -171,7 +189,7 @@ def set_admin(
     if not body.admin and user.id == admin.id:
         raise HTTPException(403, "You cannot take away your own admin rights.")
     auth.confirm_password(
-        db, request, admin.username, body.your_password, "admin-rights",
+        db, request, admin.username, body.your_password, auth.REAUTH,
         "Your password is wrong, so the admin rights were not changed.",
     )
     if not body.admin:
@@ -182,4 +200,5 @@ def set_admin(
             raise HTTPException(403, "This page is for admins only.")
     user.is_admin = body.admin
     db.commit()
+    log.warning("Admin %s %s %s", admin.username, "made an admin:" if body.admin else "took admin rights from", user.username)
     return _account(user)

@@ -100,8 +100,7 @@ things depend on the browser sending the hub's cookie to the hub from a platform
 - **Admin > JupyterHub** shows JupyterHub's admin panel in a frame.
 
 Teachers and platform admins (`--admin`) are JupyterHub admins. The hub decides this when that person's
-hub session starts, so after `set-admin` on a student account they log out of the platform and in again.
-Teachers are hub admins either way, so making a teacher an admin in the site (or no longer one) changes nothing there.
+hub session starts, so after `set-admin` they log out of the platform and in again.
 
 Password guessing is limited: 5 wrong passwords for one username from one address, then 15 minutes of
 refusals. The counters are in the backend's memory (keep one uvicorn worker, as `api/Dockerfile` does;
@@ -134,6 +133,10 @@ and makes those tokens (`platform-role` in `jupyterhub/jupyterhub_config.py`). I
 server itself, but because it can make a token for any user it still reaches every notebook home in
 the end: keep it only in `deploy/.env`. To replace it, change it in `deploy/.env` and run
 `docker compose up -d`: the hub forgets the old token when it starts.
+
+The backend logs who gave another admin a new password, and who gave or took admin rights, in the
+site: `docker compose logs backend | grep "Admin "`. Docker keeps these lines only as long as that
+container: `docker compose up -d --build` makes a new one, so copy them out first if they matter.
 
 More account commands (same tool, `api/app/manage.py`):
 
