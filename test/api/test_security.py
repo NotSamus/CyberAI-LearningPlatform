@@ -338,17 +338,46 @@ def test_admin_edits_resets_and_removes_accounts(client, db, no_hub):
     assert login(TestClient(app), "maria").status_code == 401 and login(maria, "maria", password).status_code == 200
     assert "argon2" not in r.text
 
-    # Admin accounts are only handled on the server itself: not another admin's, not your own.
+    # Admins are not removed from the browser, neither another admin nor yourself; your own new
+    # password is not made here either (My account asks for the current one).
     for admin_id in (1, 3):
-        assert client.post(f"/api/admin/users/{admin_id}/reset-password").status_code == 403
         assert client.delete(f"/api/admin/users/{admin_id}").status_code == 403
-    assert login(TestClient(app), "chief").status_code == 200
+    assert client.post("/api/admin/users/1/reset-password", json={"your_password": PASSWORD}).status_code == 403
+    assert login(TestClient(app), "boss").status_code == 200 and login(TestClient(app), "chief").status_code == 200
 
     assert client.delete("/api/admin/users/2").json() == {"deleted": True}
     assert no_hub == ["s-2"]                                     # their notebook servers and hub login went too
     assert maria.get("/api/me").status_code == 401 and login(TestClient(app), "maria", password).status_code == 401
     assert client.delete("/api/admin/users/2").status_code == 404
     assert [u["username"] for u in client.get("/api/admin/users").json()] == ["boss", "chief"]
+
+
+def test_another_admins_new_password_needs_your_own(client, db):
+    """A browser left logged in as an admin (or a login taken from one) must not be able to lock the
+    other admins out: the acting admin types their own password again, and guesses are limited."""
+    auth.create_user(db, "boss", PASSWORD, role="teacher", is_admin=True)
+    auth.create_user(db, "chief", PASSWORD, role="teacher", is_admin=True)
+    chief = TestClient(app)
+    login(chief, "chief")
+    login(client, "boss")
+
+    for body in (None, {}, {"your_password": ""}, {"your_password": "not my password"}):
+        r = client.post("/api/admin/users/2/reset-password", json=body)
+        assert r.status_code == 400 and "Your password is wrong" in r.json()["detail"]
+    assert chief.get("/api/me").status_code == 200               # still logged in, password unchanged
+
+    r = client.post("/api/admin/users/2/reset-password", json={"your_password": PASSWORD})
+    password = r.json()["password"]
+    assert r.status_code == 200 and r.json()["is_admin"] is True and len(password) >= 12
+    assert chief.get("/api/me").status_code == 401               # logged out everywhere
+    assert login(TestClient(app), "chief").status_code == 401 and login(TestClient(app), "chief", password).status_code == 200
+    assert client.get("/api/me").status_code == 200              # the acting admin stays logged in
+
+    # Guessing the acting admin's password this way is cut off like logins are, even the right one after.
+    for guess in range(auth.MAX_LOGIN_ATTEMPTS):
+        assert client.post("/api/admin/users/2/reset-password", json={"your_password": f"guess {guess}"}).status_code == 400
+    assert client.post("/api/admin/users/2/reset-password", json={"your_password": PASSWORD}).status_code == 429
+    assert login(TestClient(app), "chief", password).status_code == 200
 
 
 def test_an_account_is_not_removed_while_the_hub_is_unreachable(client, db, monkeypatch):

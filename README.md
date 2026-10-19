@@ -113,15 +113,18 @@ After that, an admin manages accounts in the site, under **Admin** (top bar) > *
 - **Edit**: the name and whether the account may use GPU notebooks. The username and the role are fixed
   (the account's notebook files are stored under a name made from its role and number).
 - **New password** (in the row's ⋯ menu), for someone who forgot theirs: again generated and shown once,
-  and the account is logged out everywhere.
+  and the account is logged out everywhere. For another admin's account the site first asks for your own
+  password (guesses are limited like logins), so a browser left logged in cannot lock the other admins
+  out. Your own password is changed under **My account**, not here.
 - **Remove** (in the ⋯ menu): deletes the account with its submissions and grades, stops its notebook servers and ends
   its JupyterHub login. The files in its notebook home stay on the server.
 
 Everyone changes their own password under **My account**, in the menu under their name at the top right (the current password is asked for
 again, and every other device is logged out).
 
-Admin accounts are different on purpose: the site cannot give or take admin rights, and cannot set an
-admin's password or remove an admin. That needs access to the server itself, with the command line tool:
+Admin accounts are different on purpose: the site cannot give or take admin rights, and cannot remove an
+admin. That needs access to the server itself, with the command line tool (also the way back in when no
+admin can log in):
 
 ```bash
 python -m app.manage set-admin maria                               # or: set-admin maria --remove
