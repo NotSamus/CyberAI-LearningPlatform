@@ -56,6 +56,10 @@ docker compose exec backend alembic -c ../sql/alembic.ini upgrade head   # adds 
 Run the migration every time: a new version may need tables the old one did not have (lessons were
 added this way, and the column that keeps each account's theme), and until they exist the pages that use them answer with an error.
 
+New Python packages for the backend are listed in `api/requirements.txt` at exact versions, and
+`--build` installs them into its image. The export of students' progress and grades (Excel files,
+2026-10-19) added `openpyxl` this way; it needs no migration and no new setting in `deploy/.env`.
+
 **Once, when updating to the version that stopped sending the hub token to notebook servers**, replace
 `PLATFORM_HUB_API_TOKEN`: earlier versions sent it to every student's running notebook server, where
 code the student ran could have copied it. Put a new value in `deploy/.env` (from `openssl rand -hex 32`),

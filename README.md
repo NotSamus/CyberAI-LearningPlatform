@@ -21,10 +21,11 @@ api/app/grading.py             talks to the grading service; reads Otter-Grader'
 api/app/teach.py               teacher-only API behind Teach: assignments, courses, announcements, the gradebook
 api/app/lessons.py             lessons: their blocks, who sees which, knowledge checks (checked on the server), pictures
 api/app/lesson_routes.py       lessons over HTTP: the teacher API behind Teach > Lessons, and reading and answering for everyone
+api/app/exports.py             students' progress and grades as CSV or Excel, for one course or every student (teachers only)
 api/app/jupyter/               OAuth2 provider for JupyterHub, hub REST client, launch and submit API (copies notebooks to and from students)
 grader/                        grading service: runs Otter-Grader in throwaway locked-down containers (its own Docker image)
 sql/                           Alembic database migrations (see sql/README.md)
-test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading, lessons), test/sql (migrations)
+test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading, lessons, exports), test/sql (migrations)
 frontend/                      Next.js + TypeScript app: login, Home (what to do next, lessons and assignments by course),
                                lesson page, notebook page with iframe and Submit, Teach (/teach), Admin (/admin), My account
 assignments/<id>/              example notebooks to import, one of them autograded (see Assignments below)
@@ -307,6 +308,35 @@ Deleting a course keeps its lessons and assignments, given to nobody until a tea
 **Teach > Announcements** posts a short message to everyone or to one course. Students see the five
 newest ones meant for them on Home.
 
+### Exporting students' progress and grades
+
+**Export** on a course's **Students** tab downloads that course's students; **Export** on
+**Teach > Courses** downloads every student on the platform. Each offers Excel (.xlsx) or CSV, named
+like `cs-101-students-2026-10-19.xlsx` or `all-students-2026-10-19.csv`. The server makes the file and
+checks the account first: teachers and admins get it, students get 403.
+
+One row per student, by username (the platform records no real names), with these columns:
+
+- **Course** (one course) or **Courses** (every student: all of theirs, separated by `;`).
+- **Lessons completed** and **Lessons given**; **Checks answered** (at least one try, as on a lesson's
+  Progress tab), **Checks correct** and **Checks given** (the knowledge checks in those lessons).
+- For each assignment, soonest due first: **status** (`not started`, `opened`, `submitted`, `late`
+  (handed in after the due date, no grade yet), `graded`, `graded late`, `could not be graded`) and
+  **score**, with what it is out of in the column's name. Both are empty for a student the assignment
+  was not given to.
+- **Assignments submitted**, **Assignments given**, **Total score** and **Total out of**. The totals add
+  up graded work only, so score / out of is a running grade: work not handed in yet does not count as 0.
+
+Only published lessons and assignments count, as students never see drafts. A course's file has the
+course's own lessons and assignments and those given to every student; assignments given to students
+one by one are only in the file of every student. The Excel file of one course has one sheet; the one
+of every student has an **All students** sheet (the same as the CSV) and a sheet per course. In Excel
+the header row and the usernames stay in view, and each column can be filtered.
+
+The CSV is UTF-8 with a byte order mark, so Excel shows accents right. A cell that would start with
+`=`, `+`, `-`, `@`, a tab or a carriage return (a course or assignment name can) gets a `'` in front, so
+a spreadsheet program never runs it as a formula; in the Excel file such text is stored as text instead.
+
 ### From the command line
 
 The example notebooks in `assignments/` can be added from the command line instead of the page:
@@ -340,7 +370,9 @@ attacks the login and the admin API: password guessing (also of the current pass
 SQL injection, forged and planted cookies, oversized input, requests sent from other websites, and a
 student asking for admin data or trying to create, change or remove accounts. `test_assignments.py`,
 `test_courses.py` and `test_grading.py` do the same for the teacher API: students trying to upload,
-grade themselves, read other students' submissions or see hidden tests. `test_lessons.py` checks that
+grade themselves, read other students' submissions or see hidden tests. `test_exports.py` checks that
+only teachers and admins get the export, that a course's file has only its own students, and that
+nothing in it runs as a formula. `test_lessons.py` checks that
 students cannot write or read drafts, and that nothing they are sent gives away an answer.
 
 The backend's JupyterHub token (`PLATFORM_HUB_API_TOKEN`) is only sent to the hub's own API, never to a

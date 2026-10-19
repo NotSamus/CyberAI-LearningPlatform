@@ -6,7 +6,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
-from app import admin, assignments, auth, config, lesson_routes, lessons, submissions, teach
+from app import admin, assignments, auth, config, exports, lesson_routes, lessons, submissions, teach
 from app.jupyter import launch, oauth
 
 # How large a request may be. Nearly everything sent here is a few lines of JSON; the exceptions
@@ -46,6 +46,7 @@ app.include_router(admin.router)     # /api/admin/users  (admins only)
 app.include_router(teach.router)     # /api/teach/...  (teachers and admins only)
 app.include_router(lesson_routes.teach_router)   # /api/teach/lessons/...  (teachers and admins only)
 app.include_router(lesson_routes.router)         # /api/lessons: read a lesson, answer its knowledge checks
+app.include_router(exports.router)   # /api/teach/students.csv, .../courses/{id}/students.xlsx  (teachers and admins only)
 app.include_router(oauth.router)     # /oauth/authorize, /oauth/token, /oauth/userinfo  (JupyterHub login)
 app.include_router(launch.router)    # /api/me, /api/assignments (the ones this person may see), launch + stop
 

@@ -6,6 +6,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Dialog from "@/components/Dialog";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
+import ExportMenu from "@/components/teach/ExportMenu";
 import { plural } from "@/components/teach/given";
 import { api, type Course, type ManagedAssignment } from "@/lib/api";
 import { JSON_HEADERS, message } from "@/lib/errors";
@@ -13,7 +14,8 @@ import type { ManagedLesson } from "@/lib/lessons";
 
 // Courses group students, so a lesson, an assignment or an announcement can be given to a whole
 // class at once. Each course has its own page: its content in the order students get it, and its students.
-// `?new=1` (from the overview, when there is no course yet) opens "New course" at once.
+// `?new=1` (from the overview, when there is no course yet) opens "New course" at once. Export: every
+// student on the platform, with a sheet per course in the Excel file.
 export default function CoursesPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
   const { new: asked } = use(searchParams);
   const [courses, setCourses] = useState<Course[] | null>(null);
@@ -34,7 +36,12 @@ export default function CoursesPage({ searchParams }: { searchParams: Promise<{ 
     <PageHeader
       title="Courses"
       description="A course is a group of students. Give it lessons, assignments and announcements, and all its students get them, including students you add to it later."
-      actions={courses && courses.length > 0 ? newCourse : undefined}      // with none yet, the empty list below offers it
+      actions={courses && (
+        <>
+          {courses.length > 0 && newCourse}{/* with none yet, the empty list below offers it */}
+          <ExportMenu path="/teach/students" label="Export every student" />
+        </>
+      )}
     />
   );
 

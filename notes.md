@@ -335,3 +335,47 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 ### Open question
 - "Due soon" and the timeline now show much the same assignments. Due soon could go, or the
   timeline could leave out what Up next lists.
+
+## Exporting students' progress and grades (2026-10-19)
+- Teachers export students as Excel (.xlsx) or CSV: **Export** on a course's Students tab (that
+  course), and **Export** on Teach > Courses (every student). A secondary button with a menu, so each
+  page still has one filled button at most. `frontend/components/teach/ExportMenu.tsx`.
+- Made on the server (`api/app/exports.py`, routes `/api/teach/students.csv|xlsx` and
+  `/api/teach/courses/<id>/students.csv|xlsx`): teachers and admins get it, students 403, logged out 401.
+- Decided with me: teachers may export every student, not only admins (every teacher already sees
+  every course and gradebook). The layout below was agreed before it was built.
+- One row per student, by username only (no real names, per the usernames-only policy). Columns:
+  Course(s); Lessons completed / given; Checks answered (any try, as on a lesson's Progress tab) /
+  correct / given; per assignment, soonest due first, a status (not started, opened, submitted, late =
+  handed in after the due date with no grade yet, graded, graded late, could not be graded) and a score
+  "(of N)"; then Assignments submitted / given, Total score, Total out of. Totals count graded work
+  only, so score / out of is a running grade.
+- Published lessons and assignments only. A course's file: its own lessons and assignments plus those
+  for every student. Every student's file: everything; cells left empty where an assignment was not
+  given to that student. Assignments given one by one are only in the file of every student.
+- Excel: one sheet for a course; for every student "All students" (same as the CSV) plus a sheet per
+  course. Bold header, header and usernames frozen, filters on. Names like `cs-101-students-2026-10-19.xlsx`.
+- CSV is UTF-8 with a byte order mark (Excel). Cells starting with = + - @ tab or CR get a `'` in front;
+  in the Excel file such text is stored as text (never a formula) and keeps no quote.
+- New backend packages: `openpyxl` 3.1.5 and its `et-xmlfile` 2.0.0 (exact versions in
+  `api/requirements.txt`, installed in CyberP). On the server: `git pull`, `docker compose up -d --build`;
+  no migration.
+
+### Checked
+- 6 new tests (`test/api/test_exports.py`): 401/403/200 for logged out, students, a teacher and an
+  admin; a course's file has only its students and what they were given; the whole platform's CSV and
+  workbook row by row, opened with openpyxl; formula-looking titles and course names; sheet names.
+  All 118 backend tests, ruff, tsc and ESLint pass. Both Docker images build.
+- In the dev browser at 768, 1024 and 1440 px, with made-up data fed to the pages: the Students tab and
+  Teach > Courses, the menu open, its two links.
+
+### Not verified
+- Downloading a real file through the site while logged in (no teacher password in the dev database
+  at hand); the routes were only tried logged out through the dev site (401) and in the tests.
+- Opening the files in Excel itself, and in Numbers or Google Sheets (only openpyxl read them). Excel
+  may show the `'` in front of a formula-looking CSV cell instead of hiding it.
+- Large classes: everything is read in a few queries, but it was only tried with a handful of students.
+
+### Limits
+- Two assignments with the same title get columns with the same names.
+- In the file of every student, a published assignment given to nobody is still there, as empty columns.
