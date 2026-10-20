@@ -14,8 +14,8 @@ import { api, download, type Course, type ManagedAssignment } from "@/lib/api";
 import { formatWhen } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import {
-  BLOCK_LABELS, BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, duplicate, importText, lessonsZip, newId, outline, youtubeId,
-  type Block, type Kind, type LessonDraft, type ManagedLesson, type Tone,
+  BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, blockLabel, duplicate, importText, lessonsZip, newId, outline, youtubeId,
+  type Block, type Kind, type LessonDraft, type ManagedLesson, type Picture, type Tone,
 } from "@/lib/lessons";
 
 type Saving = "saved" | "unsaved" | "saving" | "failed";
@@ -190,8 +190,17 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     }
   }
 
-  // Pictures pasted or dropped anywhere in the lesson become picture blocks, below the block being worked on.
+  // Pictures pasted or dropped anywhere in the lesson become picture blocks, below the block being
+  // worked on. When that block is a picture question still waiting for its picture, the first one
+  // goes into the question.
   async function addPictures(files: File[]) {
+    const waiting = blocks.find((b) => b.id === active.current);
+    if (waiting?.type === "multiple_choice" && waiting.picture?.image_id === null) {
+      const image_id = await uploadPicture(files[0]);
+      if (image_id === null) return;
+      setBlocks((all) => all.map((b) => (b.id === waiting.id && b.type === "multiple_choice" ? { ...b, picture: { image_id, alt: b.picture?.alt ?? "" } } : b)));
+      files = files.slice(1);
+    }
     for (const file of files) {
       const image_id = await uploadPicture(file);
       if (image_id === null) return;
@@ -381,7 +390,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
             }}
           >
             <div className="block-bar">
-              <span className="check-label">{BLOCK_LABELS[block.type]}</span>
+              <span className="check-label">{blockLabel(block)}</span>
               <span className="spacer" />
               <button className="icon" title="Move up" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden /></button>
               <button className="icon" title="Move down" aria-label="Move down" disabled={index === blocks.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden /></button>
@@ -396,7 +405,11 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
                 onEmptyBackspace={() => { if (blocks.length > 1) remove(index); }}
               />
             )}
-            {block.type === "multiple_choice" && <ChoiceEditor block={block} onChange={(changes) => change(block.id, changes)} onFocus={setFocus} />}
+            {block.type === "multiple_choice" && (
+              <ChoiceEditor
+                block={block} lessonId={lessonId} upload={uploadPicture} onChange={(changes) => change(block.id, changes)} onFocus={setFocus}
+              />
+            )}
             {block.type === "short_answer" && <WrittenEditor block={block} onChange={(changes) => change(block.id, changes)} />}
             {block.type === "code" && (
               <>
@@ -424,7 +437,10 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
               </>
             )}
             {block.type === "image" && (
-              <PictureEditor block={block} lessonId={lessonId} upload={uploadPicture} onChange={(changes) => change(block.id, changes)} />
+              <PictureSlot
+                picture={block} focusId={block.id} lessonId={lessonId} upload={uploadPicture} onChange={(changes) => change(block.id, changes)}
+                hint="PNG, JPEG, GIF or WebP, up to 5 MB. Pasting a picture anywhere in the lesson works too."
+              />
             )}
             {block.type === "video" && <VideoEditor block={block} onChange={(changes) => change(block.id, changes)} />}
             {block.type === "assignment" && (
@@ -565,8 +581,10 @@ function TextEditor({ block, onChange, onSlash, onEmptyBackspace }: {
   );
 }
 
-function ChoiceEditor({ block, onChange, onFocus }: {
+function ChoiceEditor({ block, lessonId, upload, onChange, onFocus }: {
   block: Of<"multiple_choice">;
+  lessonId: string;
+  upload: (file: File) => Promise<number | null>;
   onChange: (changes: Partial<Of<"multiple_choice">>) => void;
   onFocus: (id: string) => void;
 }) {
@@ -595,6 +613,14 @@ function ChoiceEditor({ block, onChange, onFocus }: {
         className="question" data-focus={block.id} value={block.question} maxLength={2000} placeholder="Question"
         aria-label="Question" onChange={(e) => onChange({ question: e.target.value })}
       />
+      {block.picture && (
+        <PictureSlot
+          picture={block.picture} lessonId={lessonId} upload={upload} question
+          onChange={(changes) => onChange({ picture: { ...block.picture!, ...changes } })}
+          onRemove={() => onChange({ picture: undefined })}
+          hint="PNG, JPEG, GIF or WebP, up to 5 MB. Students see it between the question and the options. Pasting a picture while you work on this question works too."
+        />
+      )}
       <ul className="option-list">
         {options.map((option, index) => (
           <li key={option.id}>
@@ -628,6 +654,7 @@ function ChoiceEditor({ block, onChange, onFocus }: {
       </ul>
       <p className="row muted">
         <button className="secondary" disabled={options.length >= MAX_OPTIONS} onClick={() => addOption(options.length - 1)}>Add an option</button>
+        {!block.picture && <button className="secondary" onClick={() => onChange({ picture: { image_id: null, alt: "" } })}>Add a picture</button>}
         <span>
           {correct === 0 && "Tick the correct option, or start it with *. "}
           {correct === 1 && "Students choose one option. "}
@@ -665,11 +692,16 @@ function WrittenEditor({ block, onChange }: { block: Of<"short_answer">; onChang
   );
 }
 
-function PictureEditor({ block, lessonId, upload, onChange }: {
-  block: Of<"image">;
+// A picture to upload, then shown with its description: a picture block, or the picture of a question.
+function PictureSlot({ picture, focusId, lessonId, upload, onChange, onRemove, hint, question = false }: {
+  picture: Picture;
+  focusId?: string;             // a picture block's id; a question's goes to its question field
   lessonId: string;
   upload: (file: File) => Promise<number | null>;
-  onChange: (changes: Partial<Of<"image">>) => void;
+  onChange: (changes: Partial<Picture>) => void;
+  onRemove?: () => void;        // a question's: it goes back to having no picture
+  hint: string;
+  question?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -681,24 +713,26 @@ function PictureEditor({ block, lessonId, upload, onChange }: {
     setBusy(false);
   }
 
-  if (block.image_id === null) {
+  const remove = onRemove && <button className="secondary" onClick={onRemove}>Remove picture</button>;
+  if (picture.image_id === null) {
     return (
-      <FileDrop
-        accept="image/png,image/jpeg,image/gif,image/webp" what="a picture" busy={busy} focusId={block.id} onFile={chosen}
-        hint="PNG, JPEG, GIF or WebP, up to 5 MB. Pasting a picture anywhere in the lesson works too."
-      />
+      <>
+        <FileDrop accept="image/png,image/jpeg,image/gif,image/webp" what="a picture" busy={busy} focusId={focusId} onFile={chosen} hint={hint} />
+        {remove && <p className="row">{remove}</p>}
+      </>
     );
   }
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element -- served by the backend, to logged-in readers only */}
-      <img className="picture" src={`/api/lessons/${lessonId}/images/${block.image_id}`} alt={block.alt} />
+      <img className={`picture ${question ? "question-picture" : ""}`} src={`/api/lessons/${lessonId}/images/${picture.image_id}`} alt={picture.alt} />
       <p className="row">
         <input
-          className="grow" data-focus={block.id} value={block.alt} maxLength={300} aria-label="Description of the picture"
+          className="grow" data-focus={focusId} value={picture.alt} maxLength={300} aria-label="Description of the picture"
           placeholder="Describe the picture, for readers who cannot see it" onChange={(e) => onChange({ alt: e.target.value })}
         />
         <button className="secondary" onClick={() => onChange({ image_id: null })}>Change picture</button>
+        {remove}
       </p>
     </>
   );

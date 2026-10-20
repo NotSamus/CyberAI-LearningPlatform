@@ -451,6 +451,57 @@ def test_pictures(people, db):
     assert db.scalar(select(func.count()).select_from(LessonImage)) == 0
 
 
+
+def test_picture_questions(people, db):
+    """A multiple-choice or true-or-false question with a picture: checked like any other, and the
+    picture goes wherever the lesson's other pictures go."""
+    teacher, maria, jose = people
+    lesson_id = write(teacher, [text()], publish=False)
+    send = lambda: teacher.post("/api/teach/lesson-images", data={"lesson_id": lesson_id}, files={"file": ("shot.png", PNG)})  # noqa: E731
+    picture_id = send().json()["id"]
+
+    def asked(picture, block_id="pic1"):
+        return {**choice(block_id, options=(("True", True), ("False", False))), "question": "This is a phishing email.", "picture": picture}
+
+    # Chosen as a picture question but with no picture yet: saved, and not published.
+    teacher.patch(f"/api/teach/lessons/{lesson_id}", json={"blocks": [text(), asked({"image_id": None, "alt": ""})]})
+    r = teacher.post(f"/api/teach/lessons/{lesson_id}/publish")
+    assert r.status_code == 400 and r.json()["detail"] == "Block 2 (picture question): add the picture."
+    # A picture that is not this lesson's is refused, as for a picture block.
+    other = write(teacher, [text()], title="Other", publish=False)
+    other_picture = teacher.post("/api/teach/lesson-images", data={"lesson_id": other}, files={"file": ("x.png", PNG)}).json()["id"]
+    r = teacher.patch(f"/api/teach/lessons/{lesson_id}", json={"blocks": [asked({"image_id": other_picture, "alt": ""})]})
+    assert r.status_code == 400 and "was not uploaded to it" in r.json()["detail"]
+
+    # With its picture, it is published; students see the picture and never the answer.
+    shown = asked({"image_id": picture_id, "alt": "An email asking for a password"})
+    assert teacher.patch(f"/api/teach/lessons/{lesson_id}", json={"blocks": [text(), shown, choice()]}).status_code == 200
+    assert teacher.get(f"/api/teach/lessons/{lesson_id}").json()["blocks"] == [text(), shown, choice()]     # a question with no picture has no "picture"
+    assert maria.get(f"/api/lessons/{lesson_id}/images/{picture_id}").status_code == 404     # not published yet
+    assert teacher.post(f"/api/teach/lessons/{lesson_id}/publish").status_code == 200
+    seen = maria.get(f"/api/lessons/{lesson_id}").json()["blocks"]
+    assert seen[1] == {
+        "type": "multiple_choice", "id": "pic1", "question": "This is a phishing email.",
+        "picture": {"url": f"/api/lessons/{lesson_id}/images/{picture_id}", "alt": "An email asking for a password"},
+        "options": [{"id": "pic1-0", "text": "True"}, {"id": "pic1-1", "text": "False"}], "multiple": False, "state": None,
+    }
+    assert "picture" not in seen[2]
+    r = maria.get(f"/api/lessons/{lesson_id}/images/{picture_id}")
+    assert r.status_code == 200 and r.content == PNG
+    assert jose.get(f"/api/lessons/{lesson_id}/images/{picture_id}").status_code == 200       # the lesson is for everyone
+    assert answer(maria, "pic1", lesson_id, choices=["pic1-1"]).json()["correct"] is False
+    assert answer(maria, "pic1", lesson_id, choices=["pic1-0"]).json()["correct"] is True
+
+    # Publishing again long after it was uploaded keeps the picture: a question uses it.
+    db.execute(LessonImage.__table__.update().values(created_at=func.now() - func.make_interval(0, 0, 0, 1)))
+    db.commit()
+    assert teacher.post(f"/api/teach/lessons/{lesson_id}/publish").status_code == 200
+    assert maria.get(f"/api/lessons/{lesson_id}/images/{picture_id}").status_code == 200
+    # Taken out of the question, the next publish deletes it.
+    teacher.patch(f"/api/teach/lessons/{lesson_id}", json={"blocks": [text(), choice()]})
+    assert teacher.post(f"/api/teach/lessons/{lesson_id}/publish").status_code == 200
+    assert db.scalar(select(func.count()).select_from(LessonImage).where(LessonImage.id == picture_id)) == 0
+
 def test_students_cannot_write_lessons(people, db):
     teacher, maria, _ = people
     write(teacher, [text(), choice()])

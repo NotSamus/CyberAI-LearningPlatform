@@ -4,6 +4,8 @@ import type { Student } from "@/lib/api";
 // same shapes (api/app/lessons.py) and never sends them to students.
 export type Option = { id: string; text: string; correct: boolean };
 export type Tone = "note" | "tip" | "warning";
+// The picture a question shows, between the question and its options. A question without one has no `picture`.
+export type Picture = { image_id: number | null; alt: string };
 export type Block =
   | { type: "text"; id: string; text: string }                                    // Markdown
   | { type: "code"; id: string; language: string; code: string }
@@ -11,7 +13,7 @@ export type Block =
   | { type: "image"; id: string; image_id: number | null; alt: string }
   | { type: "video"; id: string; url: string }                                    // a YouTube link
   | { type: "assignment"; id: string; assignment_id: number | null }              // a link to a notebook assignment
-  | { type: "multiple_choice"; id: string; question: string; options: Option[]; explanation: string }
+  | { type: "multiple_choice"; id: string; question: string; options: Option[]; explanation: string; picture?: Picture }
   | { type: "short_answer"; id: string; question: string; answers: string[]; explanation: string };
 
 // Where the reader is with one knowledge check. The explanation and the right answer (`solution`:
@@ -35,7 +37,10 @@ export type ViewBlock =
   | { type: "image"; id: string; url: string; alt: string }
   | { type: "video"; id: string; video_id: string }
   | { type: "assignment"; id: string; assignment_id: number; title: string }
-  | { type: "multiple_choice"; id: string; question: string; options: { id: string; text: string }[]; multiple: boolean; state: CheckState | null }
+  | {
+    type: "multiple_choice"; id: string; question: string; picture?: { url: string; alt: string };
+    options: { id: string; text: string }[]; multiple: boolean; state: CheckState | null;
+  }
   | { type: "short_answer"; id: string; question: string; state: CheckState | null };
 
 // A knowledge check, as a reader gets it.
@@ -118,7 +123,9 @@ function option(text = "", correct = false): Option {
 }
 
 // The blocks a teacher can add: the menu of the editor. `words` are what typing "/" looks through.
-export type Kind = "text" | "multiple_choice" | "true_false" | "short_answer" | "code" | "callout" | "image" | "video" | "assignment";
+export type Kind =
+  | "text" | "multiple_choice" | "true_false" | "picture_choice" | "picture_true_false" | "short_answer"
+  | "code" | "callout" | "image" | "video" | "assignment";
 export const BLOCK_MENU: { kind: Kind; label: string; words: string[]; make: () => Block }[] = [
   { kind: "text", label: "Text", words: ["text", "paragraph", "heading"], make: () => ({ type: "text", id: newId(), text: "" }) },
   {
@@ -136,6 +143,20 @@ export const BLOCK_MENU: { kind: Kind; label: string; words: string[]; make: () 
   { kind: "code", label: "Code", words: ["code", "snippet"], make: () => ({ type: "code", id: newId(), language: "python", code: "" }) },
   { kind: "callout", label: "Callout", words: ["callout", "note", "tip", "warning"], make: () => ({ type: "callout", id: newId(), tone: "note", text: "" }) },
   { kind: "image", label: "Picture", words: ["picture", "image", "photo"], make: () => ({ type: "image", id: newId(), image_id: null, alt: "" }) },
+  // After Picture, so that typing "/pic" and Enter still gives a picture block.
+  {
+    kind: "picture_choice", label: "Picture + multiple choice", words: ["picture question", "picture choice", "image question", "photo question"],
+    make: () => ({
+      type: "multiple_choice", id: newId(), question: "", options: [option(), option()], explanation: "", picture: { image_id: null, alt: "" },
+    }),
+  },
+  {
+    kind: "picture_true_false", label: "Picture + true or false", words: ["picture true or false", "picture tf", "image true or false"],
+    make: () => ({
+      type: "multiple_choice", id: newId(), question: "", options: [option("True"), option("False")], explanation: "",
+      picture: { image_id: null, alt: "" },
+    }),
+  },
   { kind: "video", label: "Video", words: ["video", "youtube"], make: () => ({ type: "video", id: newId(), url: "" }) },
   { kind: "assignment", label: "Notebook", words: ["notebook", "assignment", "lab"], make: () => ({ type: "assignment", id: newId(), assignment_id: null }) },
 ];
@@ -144,6 +165,13 @@ export const BLOCK_LABELS: Record<Block["type"], string> = {
   text: "Text", code: "Code", callout: "Callout", image: "Picture", video: "Video", assignment: "Notebook assignment",
   multiple_choice: "Multiple choice", short_answer: "Short answer",
 };
+
+// What the editor calls a block, above it. A multiple-choice question with a picture is a "picture question".
+export function blockLabel(block: Block): string {
+  if (block.type !== "multiple_choice" || !block.picture) return BLOCK_LABELS[block.type];
+  const trueFalse = block.options.length === 2 && block.options[0].text === "True" && block.options[1].text === "False";
+  return trueFalse ? "Picture + true or false" : "Picture + multiple choice";
+}
 
 // A copy of a block with ids of its own.
 export function duplicate(block: Block): Block {

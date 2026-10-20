@@ -168,6 +168,10 @@ function ChoiceCheck({ lessonId, block, onAnswered }: { lessonId: number; block:
     <section id={checkAnchor(block.id)} tabIndex={-1} className={`quiz ${tone(state)}`} aria-label="Knowledge check">
       <CheckHead state={state} multiple={block.multiple} />
       <Markdown text={block.question} />
+      {block.picture && (
+        // eslint-disable-next-line @next/next/no-img-element -- served by the backend, to logged-in readers only
+        <img className="picture question-picture" src={block.picture.url} alt={block.picture.alt} loading="lazy" />
+      )}
       <div className="options">
         {block.options.map((option, n) => {
           const picked = chosen.includes(option.id);

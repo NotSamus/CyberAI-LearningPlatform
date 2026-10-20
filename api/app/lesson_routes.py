@@ -337,7 +337,7 @@ def lesson_image(
     """A picture of a lesson, for the people who may see that lesson. Students only get the pictures
     of the published version: not one that is only in the teacher's working copy yet, or was uploaded
     and never used."""
-    shown = {block["image_id"] for block in lesson.live_blocks if block["type"] == "image"}
+    shown = lessons.picture_ids(lesson.live_blocks)
     image = lessons.get_image(db, lesson.id, image_id) if user.can_teach or image_id in shown else None
     if image is None:
         raise HTTPException(404, "No such picture.")

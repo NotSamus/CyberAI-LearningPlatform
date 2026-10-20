@@ -1,7 +1,9 @@
 """Lessons: pages teachers write in the platform, made of blocks.
 
 A lesson is a list of blocks: text (Markdown), code, a callout, an image, a video, a link to a
-notebook assignment, and knowledge checks (a multiple-choice or a short-answer question).
+notebook assignment, and knowledge checks (a multiple-choice or a short-answer question). A
+multiple-choice question may show a picture (a "picture question"; true or false is a
+multiple-choice question with the options True and False).
 
 The teacher's working copy (`Lesson.blocks`) is saved as they type and may be unfinished. Students
 get `Lesson.live_blocks`: the working copy as it was the last time the teacher pressed Publish.
@@ -99,6 +101,12 @@ class Option(BaseModel):
     correct: bool = False
 
 
+class Picture(BaseModel):
+    """The picture a question shows, between the question and its options."""
+    image_id: int | None = None                                         # a LessonImage of this lesson; None until it is uploaded
+    alt: str = Field("", max_length=300)
+
+
 class MultipleChoice(BaseModel):
     """One correct option: students pick one. Several: they must pick exactly those."""
     type: Literal["multiple_choice"]
@@ -106,6 +114,7 @@ class MultipleChoice(BaseModel):
     question: str = Field("", max_length=MAX_QUESTION_LENGTH)           # Markdown
     options: list[Option] = Field(default_factory=list, max_length=MAX_OPTIONS)
     explanation: str = Field("", max_length=MAX_QUESTION_LENGTH)        # Markdown; shown once the question is closed
+    picture: Picture | None = None                                      # a picture question; left out of the stored block when None
 
 
 class ShortAnswer(BaseModel):
@@ -135,12 +144,22 @@ def video_id(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+def picture_ids(blocks: list[dict]) -> set[int]:
+    """The pictures these blocks show: picture blocks and picture questions."""
+    found = set()
+    for block in blocks:
+        if block["type"] == "image":
+            found.add(block["image_id"])
+        elif block["type"] == "multiple_choice" and block.get("picture"):      # blocks stored before pictures in questions have no "picture"
+            found.add(block["picture"]["image_id"])
+    return found - {None}
+
+
 def check_blocks(db: Session, lesson: Lesson, raw: object) -> list[dict]:
     """A working copy as the editor sent it, in the shape it is stored in. It may be unfinished (a
     question with no correct option yet): `problems` decides whether it can be published."""
     blocks = check_shape(raw)
-    pictures = {block["image_id"] for block in blocks if block["type"] == "image" and block["image_id"] is not None}
-    if pictures - set(db.scalars(select(LessonImage.id).where(LessonImage.lesson_id == lesson.id))):
+    if picture_ids(blocks) - set(db.scalars(select(LessonImage.id).where(LessonImage.lesson_id == lesson.id))):
         raise LessonError("A picture in this lesson was not uploaded to it. Add the picture again.")
     return blocks
 
@@ -158,6 +177,9 @@ def check_shape(raw: object) -> list[dict]:
         number = where[0] + 1 if where and isinstance(where[0], int) else "?"
         field = ", ".join(str(part) for part in where[2:]) or "its type"
         raise LessonError(f"Block {number} cannot be saved ({field}): {error['msg']}.")
+    for block in blocks:
+        if block["type"] == "multiple_choice" and block["picture"] is None:
+            del block["picture"]        # a question with no picture is stored as it was before questions could have one
     ids = [block["id"] for block in blocks]
     for block in blocks:
         if block["type"] == "multiple_choice":
@@ -197,9 +219,11 @@ def problems(blocks: list[dict]) -> list[str]:
     for number, block in enumerate(blocks, start=1):
         kind = block["type"]
         if kind == "multiple_choice":
-            where = f"Block {number} (multiple choice)"
+            where = f"Block {number} ({'picture question' if block.get('picture') else 'multiple choice'})"
             if not block["question"].strip():
                 found.append(f"{where}: write the question.")
+            if block.get("picture") and block["picture"]["image_id"] is None:
+                found.append(f"{where}: add the picture.")
             if len(_options(block)) < 2:
                 found.append(f"{where}: give at least two options.")
             elif not _correct_ids(block):
@@ -340,9 +364,12 @@ def view(db: Session, user: PlatformUser, lesson: Lesson) -> list[dict]:
             if block["assignment_id"] in titles:    # left out when this person was not given the assignment
                 shown.append({**here, "assignment_id": block["assignment_id"], "title": titles[block["assignment_id"]]})
         elif kind == "multiple_choice":
+            picture = block.get("picture")
             shown.append({
                 **here,
                 "question": block["question"],
+                **({"picture": {"url": f"/api/lessons/{lesson.id}/images/{picture['image_id']}", "alt": picture["alt"]}}
+                   if picture and picture["image_id"] is not None else {}),
                 "options": [{"id": option["id"], "text": option["text"]} for option in _options(block)],
                 "multiple": len(_correct_ids(block)) > 1,
                 "state": _state(block, answers.get(block["id"])),
@@ -513,10 +540,9 @@ def publish(db: Session, lesson: Lesson) -> None:
     lesson.published_at = datetime.now(timezone.utc)
     # Pictures that were uploaded and then taken out again. Not the newest ones: the editor may be
     # about to save the block one of them goes with.
-    used = {block["image_id"] for block in lesson.blocks if block["type"] == "image" and block["image_id"] is not None}
     db.execute(delete(LessonImage).where(
         LessonImage.lesson_id == lesson.id,
-        LessonImage.id.not_in(used),
+        LessonImage.id.not_in(picture_ids(lesson.blocks)),
         LessonImage.created_at < datetime.now(timezone.utc) - timedelta(hours=1),
     ))
     db.commit()

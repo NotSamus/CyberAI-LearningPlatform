@@ -19,8 +19,9 @@ In the file (format version 1):
     README.txt                            what this is, for whoever opens the file
 
 The blocks are as they are stored (app/lessons.py), except that pictures and notebooks are named by
-their file in the .zip, since ids mean nothing on another platform: a picture block has "image" in
-place of "image_id", a notebook link "notebook" in place of "assignment_id".
+their file in the .zip, since ids mean nothing on another platform: a picture block, and the
+"picture" of a picture question, have "image" in place of "image_id", a notebook link "notebook" in
+place of "assignment_id".
 
 Importing first reads and checks everything (`read`), and the route has Otter prepare the
 autograded notebooks; only then is anything stored, all in one go (`store`), so a file that cannot
@@ -87,6 +88,9 @@ def _named(block: dict, pictures: dict[int, str], notebooks: dict[int, str]) -> 
     block = {"type": block["type"], "id": block["id"], **block}
     if block["type"] == "image":
         return {**{k: v for k, v in block.items() if k != "image_id"}, "image": pictures.get(block["image_id"])}
+    if block["type"] == "multiple_choice" and block.get("picture"):
+        picture = block["picture"]
+        return {**block, "picture": {"image": pictures.get(picture["image_id"]), "alt": picture["alt"]}}
     if block["type"] == "assignment":
         return {**{k: v for k, v in block.items() if k != "assignment_id"}, "notebook": notebooks.get(block["assignment_id"])}
     return block
@@ -111,7 +115,7 @@ def export(db: Session, chosen: list[Lesson]) -> bytes:
         lesson_files = []
         for n, lesson in enumerate(chosen, start=1):
             folder = f"{n:02d}-{file_stem(lesson.title, 'lesson')}"
-            used = {block["image_id"] for block in lesson.blocks if block["type"] == "image"} - {None}
+            used = lessons.picture_ids(lesson.blocks)
             pictures: dict[int, str] = {}
             rows = db.execute(
                 select(LessonImage.id, LessonImage.content_type, LessonImage.data)
@@ -258,6 +262,8 @@ def _unlinked(block: object) -> object:
     """A block from the file without its picture or notebook: those are linked once they are stored here."""
     if isinstance(block, dict) and block.get("type") == "image":
         return {**block, "image_id": None}
+    if isinstance(block, dict) and block.get("type") == "multiple_choice" and isinstance(block.get("picture"), dict):
+        return {**block, "picture": {**block["picture"], "image_id": None}}
     if isinstance(block, dict) and block.get("type") == "assignment":
         return {**block, "assignment_id": None}
     return block
@@ -275,6 +281,8 @@ def _lesson(raw: bytes, path: str) -> NewLesson:
     for original, block in zip(content.blocks, blocks, strict=True):     # check_shape keeps them in order, one for one
         key = {"image": "image", "assignment": "notebook"}.get(block["type"])
         file = original.get(key) if key else None
+        if block["type"] == "multiple_choice" and block.get("picture"):     # a picture question: its file is in its "picture"
+            key, file = "image", original["picture"].get("image")
         if file is None:
             continue
         if not isinstance(file, str):
@@ -379,6 +387,8 @@ def read(db: Session, data: bytes) -> Found:
 def _linked(block: dict, lesson: NewLesson, picture_ids: dict[str, int], assignment_ids: dict[str, int]) -> dict:
     if block["type"] == "image":
         return {**block, "image_id": picture_ids.get(lesson.pictures.get(block["id"], ""))}
+    if block["type"] == "multiple_choice" and block.get("picture"):
+        return {**block, "picture": {**block["picture"], "image_id": picture_ids.get(lesson.pictures.get(block["id"], ""))}}
     if block["type"] == "assignment":
         return {**block, "assignment_id": assignment_ids.get(lesson.notebooks.get(block["id"], ""))}
     return block

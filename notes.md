@@ -695,6 +695,28 @@ session; 3 (one address for every notebook server) needs a wildcard DNS name and
   tested); the login page in the new versions; Halloween's bats sit over "Admin" in the bar at 768,
   as before in dark.
 
+## Picture questions in lessons (2026-10-20)
+- Two more question kinds in the lesson editor: "Picture + multiple choice" and "Picture + true or
+  false" (Add row, the + between blocks, and `/picture q…` or `/picture t…`). `/pic` + Enter still
+  gives a plain picture block.
+- Not a new block type: a multiple-choice question with an optional `picture` (`{image_id, alt}`),
+  shown between the question and the options. True or false stays a multiple-choice question with
+  the options True and False. So grading, tries and the gradebook rule are unchanged. A question
+  with no picture is stored without the `picture` key, as before.
+- Any multiple-choice question can get a picture ("Add a picture") or lose it ("Remove picture").
+  Pasting a picture while working in a picture question that has none fills it (no extra block).
+- Publish is refused for a picture question with no picture ("add the picture").
+- The picture counts everywhere the lesson's pictures do: students may load it once published,
+  Publish does not delete it as unused, and .zip export/import carries it (`"picture": {"image": file}`,
+  same format version 1; an older platform would drop the picture and keep the question).
+- Code: `picture_ids()` in `api/app/lessons.py` (used by the image route and `lesson_zip.py`),
+  `blockLabel()` and `BLOCK_MENU` in `frontend/lib/lessons.ts`, `PictureSlot` in `LessonEditor.tsx`.
+- Checked: 166 backend tests (new: `test_picture_questions`, `test_picture_questions_keep_their_picture`),
+  type check and lint. In the dev browser with throwaway accounts `picq-teacher` / `picqstudent`
+  (deleted afterwards, with the test lesson): adding both kinds, paste and drop into a question,
+  the publish refusal, answering wrong then right, completing the lesson; 768 and 1024 px, light and dark.
+- Not verified: choosing the picture with the OS file picker (pasting and dropping were tried), and
+  clicking "Add a picture", "Change picture" and "Remove picture" in the browser (only type-checked).
 
 ## Data files (datasets) beside an assignment's notebook (2026-10-20)
 - Asked for: upload a dataset with the notebook "so the lesson runs with it", and each student has a copy.

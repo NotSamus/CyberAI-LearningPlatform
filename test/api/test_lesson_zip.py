@@ -141,6 +141,30 @@ def test_a_lesson_goes_out_as_a_zip_and_comes_back_in(people, db):
     assert [lesson["title"] for lesson in maria.get("/api/lessons").json()] == ["TLS basics"]      # only the published one
 
 
+
+def test_picture_questions_keep_their_picture(people, db):
+    teacher, _, _ = people
+    lesson_id = teacher.post("/api/teach/lessons", json={"title": "Phishing"}).json()["id"]
+    image_id = teacher.post("/api/teach/lesson-images", data={"lesson_id": lesson_id}, files={"file": ("p.png", PICTURE)}).json()["id"]
+    question = {
+        "type": "multiple_choice", "id": "tfq1", "question": "This email is phishing.", "explanation": "", "options": [
+            {"id": "tfq1-a", "text": "True", "correct": True}, {"id": "tfq1-b", "text": "False", "correct": False},
+        ], "picture": {"image_id": image_id, "alt": "An email"},
+    }
+    assert teacher.patch(f"/api/teach/lessons/{lesson_id}", json={"blocks": [question]}).status_code == 200
+
+    files = opened(export(teacher, str(lesson_id)).content)
+    assert files["01-phishing/images/1.png"] == PICTURE
+    assert json.loads(files["01-phishing/lesson.json"])["blocks"][0]["picture"] == {"image": "01-phishing/images/1.png", "alt": "An email"}
+
+    r = bring_in(teacher, export(teacher, str(lesson_id)).content)
+    assert r.status_code == 201 and r.json()["warnings"] == [], r.text
+    copy_id = r.json()["lessons"][0]["id"]
+    copy = teacher.get(f"/api/teach/lessons/{copy_id}").json()["blocks"][0]
+    new_picture = copy["picture"]["image_id"]
+    assert new_picture != image_id and copy == {**question, "picture": {"image_id": new_picture, "alt": "An email"}}
+    assert teacher.get(f"/api/lessons/{copy_id}/images/{new_picture}").content == PICTURE
+
 def test_on_another_platform_the_notebooks_come_too(people, db, otter):
     teacher, maria, _ = people
     teacher.post("/api/teach/courses", json={"name": "CS 101"})
