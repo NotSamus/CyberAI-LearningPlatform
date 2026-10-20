@@ -137,7 +137,7 @@ def db(migrated_db_url, monkeypatch):
         yield session
     app.dependency_overrides.pop(get_db, None)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE users, sessions, assignments, assignment_students, assignment_opens, courses, course_students, announcements, submissions, "
+        conn.execute(text("TRUNCATE users, sessions, assignments, assignment_files, assignment_students, assignment_opens, courses, course_students, announcements, submissions, "
                           "lessons, lesson_images, lesson_progress, lesson_answers RESTART IDENTITY CASCADE"))
     engine.dispose()
 
@@ -187,7 +187,10 @@ def hub(monkeypatch):
             raise hub_client.FileTooLarge(path)
         return content
 
-    for fake in (ensure_user, start_server, has_file, put_file, get_file):
+    async def file_names(username, server, folder):
+        return {path[len(folder) + 1:] for (owner, path) in files if owner == username and path.rsplit("/", 1)[0] == folder}
+
+    for fake in (ensure_user, start_server, has_file, put_file, get_file, file_names):
         monkeypatch.setattr(hub_client, fake.__name__, fake)
     return files
 

@@ -20,7 +20,7 @@ from app import assignments, courses, grading, submissions
 from app.db import get_db
 from app.jupyter import hub_client
 from app.jupyter.deps import PlatformUser, get_current_user_optional
-from app.jupyter.launch import hub_errors, notebook_url, running_server, server_for
+from app.jupyter.launch import copy_data_files, hub_errors, notebook_url, running_server, server_for
 from app.models import Announcement, Assignment, Course, Submission, User
 
 router = APIRouter(prefix="/api/teach", tags=["teach"])
@@ -50,6 +50,7 @@ def _details(db: Session, assignment: Assignment) -> dict:
         "student_ids": assignments.student_ids(db).get(assignment.id, []),
         "created_at": assignment.created_at.isoformat(),
         "notebook_locked": assignments.a_student_has_it(db, assignment.id),     # its notebook can no longer be replaced
+        "data_files": assignments.data_files(db, assignment.id),                # [{name, size}]: datasets beside the notebook
     }
 
 
@@ -106,7 +107,8 @@ async def create_assignment(request: Request, teacher: PlatformUser = Depends(re
     are checked against them). That takes as long as running the notebook twice. Any other
     notebook is stored as it is.
 
-    A web form with the fields `title`, `file` and optionally `description`, `requires_gpu`, `due_at`.
+    A web form with the fields `title`, `file` and optionally `description`, `requires_gpu`, `due_at`,
+    and `data` (once per data file: datasets students get beside the notebook, and Otter too).
     The form is read here and not declared as parameters, so that the account check above comes
     first: someone who is not a teacher is refused before the server takes in the file."""
     async with request.form() as form:
@@ -127,13 +129,29 @@ async def create_assignment(request: Request, teacher: PlatformUser = Depends(re
             notebook=await file.read(assignments.MAX_NOTEBOOK_BYTES + 1),   # one byte more: enough to see it is too big
             created_by=teacher.id,
         )
+        data = await _data_files(form)
     with _taking_in_a_notebook():
         name = assignments.safe_notebook_name(fields["filename"])
         assignments.check_title(fields["title"])
         assignments.check_notebook(fields["notebook"])
-        fields.update(await grading.autograded_fields(fields["notebook"], name, fields["requires_gpu"]))
-        assignment = await run_in_threadpool(lambda: assignments.create(db, **fields))
+        assignments.check_data_files(data, name)
+        fields.update(await grading.autograded_fields(fields["notebook"], name, fields["requires_gpu"], data))
+        assignment = await run_in_threadpool(lambda: assignments.create(db, data_files=data, **fields))
     return _details(db, assignment)
+
+
+async def _data_files(form, field: str = "data") -> dict[str, bytes]:
+    """The data files in an upload form (name -> contents), read no further than the limit for all of
+    them together allows: one byte more says they are too large (assignments.check_data_files)."""
+    found: dict[str, bytes] = {}
+    for item in form.getlist(field):
+        if not isinstance(item, UploadFile):
+            continue
+        name = assignments.data_file_name(item.filename or "")
+        if name in found:
+            raise HTTPException(400, f"Two data files are named {name[:100]}.")
+        found[name] = await item.read(assignments.MAX_DATA_BYTES - sum(map(len, found.values())) + 1)
+    return found
 
 
 @contextmanager
@@ -236,14 +254,20 @@ def _changeable_or_409(db: Session, assignment_id: int) -> Assignment:
     return assignment
 
 
-async def _replace(db: Session, assignment: Assignment, filename: str, notebook: bytes) -> dict:
+async def _replace(db: Session, assignment: Assignment, filename: str, notebook: bytes, data: dict[str, bytes] | None = None) -> dict:
     """Takes the notebook in as an upload is taken in: Otter prepares one written in Otter Assign
-    format, which makes the assignment autograded; any other is graded by hand."""
+    format, which makes the assignment autograded; any other is graded by hand. `data`: data files in
+    place of the assignment's own (None keeps them; Otter gets them either way)."""
     with _taking_in_a_notebook():
         name = assignments.safe_notebook_name(filename)
         assignments.check_notebook(notebook)
-        fields = {"notebook": notebook, **await grading.autograded_fields(notebook, name, assignment.requires_gpu)}
-        replaced = await run_in_threadpool(lambda: assignments.replace_notebook(db, assignment.id, filename=name, **fields))
+        if data is not None:
+            assignments.check_data_files(data, name)
+        given = data
+        if given is None and grading.is_otter_master(notebook):
+            given = await run_in_threadpool(assignments.data_bytes, db, assignment.id)
+        fields = {"notebook": notebook, **await grading.autograded_fields(notebook, name, assignment.requires_gpu, given)}
+        replaced = await run_in_threadpool(lambda: assignments.replace_notebook(db, assignment.id, filename=name, data_files=data, **fields))
     return _details(db, replaced)
 
 
@@ -260,6 +284,47 @@ async def replace_assignment_notebook(
             raise HTTPException(422, "Send a notebook file.")
         filename, notebook = file.filename or "", await file.read(assignments.MAX_NOTEBOOK_BYTES + 1)
     return await _replace(db, assignment, filename, notebook)
+
+
+# --- data files beside the notebook, until a student has it ----------------------------------------
+# Datasets the notebook opens by name. Each student gets a copy when they open the assignment; an
+# autograded assignment goes through Otter again whenever they change, as its autograder carries them.
+
+def _teachers_file(db: Session, assignment: Assignment) -> bytes:
+    """The notebook as the teacher gave it: with solutions and tests when autograded."""
+    return db.scalar(select(func.coalesce(Assignment.master, Assignment.notebook)).where(Assignment.id == assignment.id))
+
+
+@router.post("/assignments/{assignment_id}/data-files")
+async def add_data_files(
+    assignment_id: int, request: Request, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db),
+):
+    """Adds the data files of a web form (the field `files`, once per file) to the assignment, in place
+    of any with the same names."""
+    assignment = await run_in_threadpool(_changeable_or_409, db, assignment_id)
+    async with request.form() as form:
+        added = await _data_files(form, "files")
+    if not added:
+        raise HTTPException(422, "Send one or more data files.")
+    data = {**await run_in_threadpool(assignments.data_bytes, db, assignment.id), **added}
+    return await _replace(db, assignment, assignment.notebook_name, await run_in_threadpool(_teachers_file, db, assignment), data)
+
+
+@router.delete("/assignments/{assignment_id}/data-files/{name}")
+async def remove_data_file(assignment_id: int, name: str, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    assignment = await run_in_threadpool(_changeable_or_409, db, assignment_id)
+    data = await run_in_threadpool(assignments.data_bytes, db, assignment.id)
+    if data.pop(name, None) is None:
+        raise HTTPException(404, "No such data file.")
+    return await _replace(db, assignment, assignment.notebook_name, await run_in_threadpool(_teachers_file, db, assignment), data)
+
+
+@router.get("/assignments/{assignment_id}/data-files/{name}")
+def download_data_file(assignment_id: int, name: str, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    content = assignments.data_bytes(db, _assignment_or_404(db, assignment_id).id, [name]).get(name)
+    if content is None:
+        raise HTTPException(404, "No such data file.")
+    return _download(content, name, "application/octet-stream")
 
 
 def _editing_copy(assignment: Assignment) -> str:
@@ -283,10 +348,10 @@ async def open_editing_copy(
     with hub_errors():
         await running_server(teacher, server)
         if body.start_over or not await hub_client.has_file(teacher.hub_username, server, path):
-            notebook = await run_in_threadpool(
-                lambda: db.scalar(select(func.coalesce(Assignment.master, Assignment.notebook)).where(Assignment.id == assignment.id))
-            )
+            notebook = await run_in_threadpool(_teachers_file, db, assignment)
             await hub_client.put_file(teacher.hub_username, server, path, notebook)
+        # Its data files beside it, so that it runs there as it will for students.
+        await copy_data_files(db, teacher.hub_username, server, path.rsplit("/", 1)[0], assignment.id)
     return {"ready": True, "profile": server, "url": notebook_url(teacher, server, path)}
 
 

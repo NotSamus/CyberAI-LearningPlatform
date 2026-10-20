@@ -238,7 +238,7 @@ async def import_lessons(request: Request, teacher: PlatformUser = Depends(requi
         found = await run_in_threadpool(lesson_zip.read, db, data)
         for notebook in found.notebooks.values():
             if notebook.existing is None:
-                notebook.otter = await grading.autograded_fields(notebook.data, notebook.name, notebook.requires_gpu)
+                notebook.otter = await grading.autograded_fields(notebook.data, notebook.name, notebook.requires_gpu, notebook.data_files)
         return await run_in_threadpool(lesson_zip.store, db, found, teacher.id, audience == "everyone", course_id)
     except (lessons.LessonError, assignments.AssignmentError) as e:
         raise HTTPException(400, str(e))

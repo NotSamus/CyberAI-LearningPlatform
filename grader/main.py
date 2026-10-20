@@ -4,7 +4,7 @@ Notebooks contain code written by students (and teachers), so it never runs here
 own container made from the student notebook image, with no network, limited memory, CPU, processes
 and time, and it is thrown away afterwards. Files go in and come out through the Docker API.
 
-    POST /prepare   a teacher's master notebook -> the students' version + the autograder package
+    POST /prepare   a teacher's master notebook (and its data files) -> the students' version + the autograder package
     POST /grade     a student's notebook + the autograder package -> scores per question
 
 Only the platform backend calls this (api/app/grading.py), with the token in GRADER_TOKEN.
@@ -31,10 +31,13 @@ IMAGES = {
 TIMEOUT = int(os.environ.get("GRADER_TIMEOUT", "300"))          # seconds one job may take
 MEMORY = os.environ.get("GRADER_MEMORY", "2g")
 MAX_PARALLEL = int(os.environ.get("GRADER_PARALLEL", "2"))
-MAX_OUTPUT_BYTES = 64 * 1024 * 1024                            # what is read back out of a container
+# What is read back out of a container. The autograder package carries the assignment's data files,
+# which the backend keeps to at most 50 MB (MAX_DATA_BYTES in api/app/assignments.py).
+MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 HOME = "/home/jovyan"                                          # the notebook image's user: jovyan, uid 1000, gid 100
 JOB = "job"                                                    # the job's folder inside HOME
 NOTEBOOK_NAME = re.compile(r"[A-Za-z0-9._-]{1,100}\.ipynb")
+DATA_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._ -]{0,98}[A-Za-z0-9._-])?")     # as checked by the backend (assignments.py)
 
 app = FastAPI(title="cyberAI grader")
 _slots = threading.BoundedSemaphore(MAX_PARALLEL)
@@ -130,16 +133,22 @@ def _checked(name: str, image: str) -> str:
     return IMAGES[image]
 
 
-def _with_autograder_package(master: bytes) -> bytes:
+def _with_autograder_package(master: bytes, data: list[str]) -> bytes:
     """Otter only builds the autograder package when the notebook's ASSIGNMENT CONFIG cell says
-    `generate`. Teachers should not have to know that: it is added when missing."""
+    `generate`. Teachers should not have to know that: it is added when missing. So is `files`, the
+    list of the assignment's data files, which Otter then puts into the package and beside every
+    submission it grades. A notebook that lists `files` itself is left as it is: it must name them all."""
     notebook = json.loads(master)
     for cell in notebook.get("cells", []):
         source = cell.get("source", "")
         text = "".join(source) if isinstance(source, list) else source
         if cell.get("cell_type") == "raw" and text.lstrip().startswith("# ASSIGNMENT CONFIG"):
             if not re.search(r"^generate\s*:", text, re.MULTILINE):
-                cell["source"] = text.rstrip("\n") + "\ngenerate: true"
+                text = text.rstrip("\n") + "\ngenerate: true"
+            if data and not re.search(r"^files\s*:", text, re.MULTILINE):
+                # Quoted, so that names such as 2024 or true stay names. They hold no quotes or backslashes.
+                text = text.rstrip("\n") + "\nfiles:" + "".join(f'\n  - "{name}"' for name in data)
+            cell["source"] = text
             return json.dumps(notebook).encode()
     raise HTTPException(400, "This notebook has no '# ASSIGNMENT CONFIG' cell, so Otter cannot prepare it.")
 
@@ -154,15 +163,24 @@ def health():
 
 
 @app.post("/prepare", dependencies=[Depends(authorized)])
-def prepare(name: str = Form(), image: str = Form("cpu"), notebook: UploadFile = File()):
+def prepare(name: str = Form(), image: str = Form("cpu"), notebook: UploadFile = File(), data: list[UploadFile] = File([])):
     """`otter assign`: from the teacher's notebook (with solutions and tests) to the version students
     get and the autograder package. Otter runs the solutions against the tests while doing so, so a
-    notebook whose own solutions fail its tests is refused here."""
+    notebook whose own solutions fail its tests is refused here. `data`: the assignment's data files,
+    put beside the notebook (the notebook opens them by name)."""
     image = _checked(name, image)
-    master = _with_autograder_package(notebook.file.read())
-    script = 'otter assign --no-pdfs "$NOTEBOOK" dist && cp dist/autograder/*.zip autograder.zip && cp "dist/student/$NOTEBOOK" student.ipynb'
+    extra = {file.filename or "": file.file.read() for file in data}
+    if any(not DATA_NAME.fullmatch(file_name) or file_name in (name, "dist") or file_name.endswith(".ipynb") for file_name in extra):
+        raise HTTPException(422, "bad data file name")
+    master = _with_autograder_package(notebook.file.read(), sorted(extra))
+    # Otter names the package after the notebook ("lab-autograder_<time>.zip"): matched exactly, as a
+    # data file may be a .zip too, and Otter copies data files into dist/autograder as well.
+    script = (
+        'otter assign --no-pdfs "$NOTEBOOK" dist && cp dist/autograder/"${NOTEBOOK%.ipynb}"-autograder_*.zip autograder.zip'
+        ' && cp "dist/student/$NOTEBOOK" student.ipynb'
+    )
     try:
-        files, log = run_job(image, script, name, {name: master}, ["student.ipynb", "autograder.zip"])
+        files, log = run_job(image, script, name, {name: master, **extra}, ["student.ipynb", "autograder.zip"])
     except JobFailed as e:
         raise _failure(e)
     if set(files) != {"student.ipynb", "autograder.zip"}:

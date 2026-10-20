@@ -1,20 +1,20 @@
 "use client";
-import { Download, FileCheck, RotateCcw, SquarePen, Trash2, Upload } from "lucide-react";
+import { Database, Download, FileCheck, Plus, RotateCcw, SquarePen, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { points } from "@/components/Status";
-import FileDrop from "@/components/teach/FileDrop";
+import FileDrop, { fileSize } from "@/components/teach/FileDrop";
 import StudentPicker from "@/components/teach/StudentPicker";
 import { useAssignmentPage } from "@/components/teach/context";
-import { api, type Course, type Launch, type ManagedAssignment, type Student } from "@/lib/api";
+import { api, dataProblem, MAX_DATA_BYTES, MAX_DATA_FILES, type Course, type Launch, type ManagedAssignment, type Student } from "@/lib/api";
 import { fromLocalInput, toLocalInput } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import { useMe } from "@/lib/useMe";
 
 const MAX_NOTEBOOK_BYTES = 10 * 1024 * 1024;    // same as MAX_NOTEBOOK_BYTES in api/app/assignments.py
 
-// An assignment's settings: what it is, who gets it and when it is due, its files, changing its
-// notebook (until a student has opened it), and deleting it.
+// An assignment's settings: what it is, who gets it and when it is due, its files (the notebook and
+// its data files), changing them (until a student has opened it), and deleting it.
 // `?new=1`: it was just uploaded, and still has to be given to students and published.
 export default function AssignmentSettings({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
   const { new: justUploaded } = use(searchParams);
@@ -26,7 +26,7 @@ export default function AssignmentSettings({ searchParams }: { searchParams: Pro
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [replaced, setReplaced] = useState("");      // what the new notebook made of the assignment
+  const [replaced, setReplaced] = useState("");      // what a new notebook or new data files made of the assignment
   const [version, setVersion] = useState(0);         // a new notebook can change the points: the form starts over
 
   useEffect(() => {
@@ -45,6 +45,25 @@ export default function AssignmentSettings({ searchParams }: { searchParams: Pro
       setSaved(true);
     } catch (e) {
       setError(message(e));
+    }
+  }
+
+  const [changingData, setChangingData] = useState(false);
+  const [dataNote, setDataNote] = useState<{ error: boolean; text: string } | null>(null);   // shown under the files, where the change was made
+  // Adds or removes data files. An autograded assignment goes through Otter again first.
+  async function changeData(done: string, request: () => Promise<ManagedAssignment>): Promise<boolean> {
+    setChangingData(true);
+    setDataNote(null);
+    try {
+      await request();
+      await reload();
+      setDataNote({ error: false, text: done });
+      return true;
+    } catch (e) {
+      setDataNote({ error: true, text: message(e) });
+      return false;
+    } finally {
+      setChangingData(false);
     }
   }
 
@@ -103,11 +122,44 @@ export default function AssignmentSettings({ searchParams }: { searchParams: Pro
               </div>
             </li>
           )}
+          {(assignment.data_files ?? []).map((data) => (
+            <li key={data.name}>
+              <span className="tile"><Database aria-hidden /></span>
+              <div className="grow">
+                <a className="title" href={`/api/teach/assignments/${assignment.id}/data-files/${encodeURIComponent(data.name)}`}>{data.name}</a>
+                <span className="muted">Data file, {fileSize(data.size)}. Each student gets a copy beside the notebook.</span>
+              </div>
+              {assignment.notebook_locked === false && (
+                <div className="row-actions">
+                  <button
+                    className="icon danger" title="Remove" aria-label={`Remove ${data.name}`} disabled={changingData}
+                    onClick={() => window.confirm(`Remove ${data.name}? Students will not get it. Keep a copy if you may need it again.`)
+                      && changeData(`${data.name} removed.`, () => api<ManagedAssignment>(
+                        `/teach/assignments/${assignment.id}/data-files/${encodeURIComponent(data.name)}`, { method: "DELETE" },
+                      ))}
+                  >
+                    <Trash2 aria-hidden />
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
         </ul>
+        {dataNote && <p className={dataNote.error ? "error log" : "notice"} role={dataNote.error ? "alert" : "status"}>{dataNote.text}</p>}
+        {assignment.notebook_locked === false && (
+          <AddDataFiles assignment={assignment} busy={changingData} onAdd={(files) => changeData(
+            files.length === 1 ? `${files[0].name} added.` : `${files.length} data files added.`,
+            () => {
+              const form = new FormData();
+              files.forEach((f) => form.append("files", f));
+              return api<ManagedAssignment>(`/teach/assignments/${assignment.id}/data-files`, { method: "POST", body: form });
+            },
+          )} onError={(text) => setDataNote({ error: true, text })} />
+        )}
         {assignment.notebook_locked && (
           <p className="muted hint">
-            A student has opened it and has their own copy, so the notebook can no longer be changed. To hand
-            out a corrected notebook, upload it as a new assignment.
+            A student has opened it and has their own copy, so the notebook and its data files can no longer be
+            changed. To hand out a corrected notebook, upload it as a new assignment.
           </p>
         )}
       </section>
@@ -135,6 +187,45 @@ export default function AssignmentSettings({ searchParams }: { searchParams: Pro
         <button className="secondary danger" onClick={remove}><Trash2 aria-hidden />Delete assignment</button>
       </section>
     </>
+  );
+}
+
+// Choosing data files to add, while no student has the assignment yet.
+function AddDataFiles({ assignment, busy, onAdd, onError }: {
+  assignment: ManagedAssignment;
+  busy: boolean;
+  onAdd: (files: File[]) => Promise<boolean>;
+  onError: (text: string) => void;
+}) {
+  const [files, setFiles] = useState<File[]>([]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    // Those with the same name as one already there take its place.
+    const kept = (assignment.data_files ?? []).filter((d) => !files.some((f) => f.name === d.name));
+    const problem = dataProblem(files, kept);
+    if (problem) return onError(problem);
+    if (await onAdd(files)) setFiles([]);
+  }
+
+  return (
+    <form className="add-data" onSubmit={add}>
+      <FileDrop
+        multiple what="data files" files={files} busy={busy} required onFiles={setFiles}
+        hint={`Datasets the notebook opens by name (CSV, JSON, images, a .zip…), beside it in each student's folder. Up to ${MAX_DATA_FILES} files, ${MAX_DATA_BYTES / (1024 * 1024)} MB in all. A file with the name of one already here takes its place.`}
+      />
+      <div className="row">
+        <button type="submit" className="secondary" disabled={busy || files.length === 0}>
+          <Plus aria-hidden />{busy ? (assignment.autograded ? "Adding… (Otter runs the notebook again first: up to a few minutes)" : "Adding…") : "Add data files"}
+        </button>
+      </div>
+      {assignment.autograded && (
+        <p className="muted hint">
+          Otter runs your notebook with them before they are kept, and its autograder carries them, so submissions are graded
+          with them. If your ASSIGNMENT CONFIG lists <code>files:</code> itself, list every data file there.
+        </p>
+      )}
+    </form>
   );
 }
 

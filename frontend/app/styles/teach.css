@@ -112,6 +112,11 @@ td.more, td.end { width: 1%; text-align: right; }
 .form label.check { display: flex; align-items: center; gap: var(--s2); font-weight: 400; }
 .form label.check select { margin-left: var(--s1); padding: var(--s1) var(--s2); }
 .form .full { grid-column: 1 / -1; margin: 0; }
+.form .field { display: grid; gap: var(--s1); }        /* a heading over a field that is not a <label> itself (a drop area) */
+.field-label { font-size: var(--t-sm); font-weight: var(--bold); }
+.add-data { display: grid; gap: var(--s3); margin-top: var(--s4); max-width: var(--w-text); }     /* Settings > Files: adding data files */
+.add-data .hint { margin: 0; }
+.list + :is(p.notice, p.error) { margin: var(--s4) 0 0; max-width: var(--w-text); }      /* what a change to the list above did */
 .form textarea { resize: vertical; }
 .form select { max-width: 100%; }
 .form fieldset { display: grid; gap: var(--s3); margin: 0; padding: var(--s3) var(--s4) var(--s4); border: 1px solid var(--border); border-radius: var(--radius); }

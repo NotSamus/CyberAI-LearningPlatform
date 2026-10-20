@@ -14,7 +14,8 @@ In the file (format version 1):
                                           "notebooks": [{"file", "title", "description", "requires_gpu", "points"}]}
     01-tls-basics/lesson.json             {"title", "summary", "blocks"}
     01-tls-basics/images/1.png            the lesson's pictures
-    notebooks/functions-lab-7/lab.ipynb   the notebooks the lessons link to
+    notebooks/functions-lab-7/lab.ipynb   the notebooks the lessons link to,
+    notebooks/functions-lab-7/ports.csv   and each one's data files beside it
     README.txt                            what this is, for whoever opens the file
 
 The blocks are as they are stored (app/lessons.py), except that pictures and notebooks are named by
@@ -65,7 +66,7 @@ This file holds the answers to the lessons' knowledge checks, and every autograd
 link to with its solutions and hidden tests. Keep it away from students.
 
 lessons.json lists the lessons in order. Each numbered folder holds one lesson (lesson.json) and
-its pictures; notebooks/ holds the notebook assignments the lessons link to.
+its pictures; notebooks/ holds the notebook assignments the lessons link to, with their data files.
 """
 
 
@@ -122,8 +123,14 @@ def export(db: Session, chosen: list[Lesson]) -> bytes:
             blocks = [_named(block, pictures, files) for block in lesson.blocks]
             put(f"{folder}/lesson.json", _json({"title": lesson.title, "summary": lesson.summary, "blocks": blocks}))
             lesson_files.append(f"{folder}/lesson.json")
+        data_files: dict[int, list[str]] = {}
         for a in notebooks:
             put(files[a.id], a.master if a.autograded else a.notebook)     # what the teacher uploaded
+            folder = files[a.id].rsplit("/", 1)[0]
+            data_files[a.id] = []
+            for name, content in assignments.data_bytes(db, a.id).items():
+                data_files[a.id].append(f"{folder}/{name}")
+                put(f"{folder}/{name}", content)
         put("lessons.json", _json({
             "format": FORMAT,
             "version": VERSION,
@@ -133,6 +140,7 @@ def export(db: Session, chosen: list[Lesson]) -> bytes:
                 {
                     "file": files[a.id], "title": a.title, "description": a.description, "requires_gpu": a.requires_gpu,
                     "points": None if a.autograded else a.points,       # an autograded one's come from its tests
+                    "data": data_files[a.id],                           # its data files, beside it
                 }
                 for a in notebooks
             ],
@@ -153,6 +161,7 @@ class _Notebook(BaseModel):
     description: str = ""
     requires_gpu: bool = False
     points: float | None = None
+    data: list[str] = Field(default_factory=list, max_length=assignments.MAX_DATA_FILES)     # its data files' paths in the .zip
 
 
 class _Contents(BaseModel):
@@ -187,6 +196,7 @@ class NewNotebook:
     name: str                           # its file name in students' homes
     data: bytes                         # as the teacher uploaded it
     existing: int | None                # the id of the same assignment, when it is here already
+    data_files: dict[str, bytes] = field(default_factory=dict)      # name -> contents: datasets beside the notebook
     otter: dict = field(default_factory=dict)       # for an autograded one: grading.autograded_fields, filled in by the route
 
 
@@ -275,23 +285,27 @@ def _lesson(raw: bytes, path: str) -> NewLesson:
     return NewLesson(title, summary, blocks, pictures, notebooks)
 
 
-def _notebook(db: Session, entry: _Notebook, data: bytes) -> NewNotebook:
+def _notebook(db: Session, entry: _Notebook, data: bytes, data_files: dict[str, bytes]) -> NewNotebook:
     try:
         title = assignments.check_title(entry.title)
         description = assignments.check_description(entry.description)
         points = assignments.check_points(entry.points)
         name = assignments.safe_notebook_name(entry.file.rsplit("/", 1)[-1])
         assignments.check_notebook(data)
+        assignments.check_data_files(data_files, name)
     except assignments.AssignmentError as e:
         raise LessonError(f"The notebook {entry.file}: {e}")
     # The same assignment here already (imported before, or this is where the file came from): the
-    # same title and the same file as the teacher uploaded it. For an autograded one that is `master`.
+    # same title, the same file as the teacher uploaded it (for an autograded one that is `master`)
+    # and the same data files.
     same = db.scalars(
         select(Assignment).where(Assignment.title == title, Assignment.notebook_name == name)
         .options(undefer(Assignment.notebook), undefer(Assignment.master)).order_by(Assignment.id)
     )
-    existing = next((a.id for a in same if (a.master if a.autograded else a.notebook) == data), None)
-    return NewNotebook(entry.file, title, description, entry.requires_gpu, points, name, data, existing)
+    existing = next(
+        (a.id for a in same if (a.master if a.autograded else a.notebook) == data and assignments.data_bytes(db, a.id) == data_files), None,
+    )
+    return NewNotebook(entry.file, title, description, entry.requires_gpu, points, name, data, existing, data_files)
 
 
 def read(db: Session, data: bytes) -> Found:
@@ -351,7 +365,14 @@ def read(db: Session, data: bytes) -> Found:
                     missing.add(path)
                     found.warnings.append(f'"{lesson.title}": the notebook {path} is not in the file, so its link is empty.')
                 continue
-            found.notebooks[path] = _notebook(db, settings[path], notebook)
+            data_files = {}
+            for data_path in settings[path].data:
+                content = files.read(data_path, assignments.MAX_DATA_BYTES)
+                if content is None:
+                    found.warnings.append(f'"{settings[path].title}": its data file {data_path} is not in the file, so it is left out.')
+                    continue
+                data_files[assignments.data_file_name(data_path)] = content
+            found.notebooks[path] = _notebook(db, settings[path], notebook, data_files)
     return found
 
 
@@ -375,7 +396,7 @@ def store(db: Session, found: Found, created_by: int | None, for_everyone: bool,
                 continue
             assignment = assignments.create(
                 db, title=notebook.title, filename=notebook.name, description=notebook.description, requires_gpu=notebook.requires_gpu,
-                for_everyone=for_everyone, created_by=created_by, commit=False,
+                for_everyone=for_everyone, created_by=created_by, data_files=notebook.data_files, commit=False,
                 **{"notebook": notebook.data, "points": notebook.points, **notebook.otter},     # Otter's version and points, when autograded
             )
             assignment.course_id = course_id

@@ -159,6 +159,17 @@ async def has_file(username: str, server: str, path: str) -> bool:
     return True
 
 
+async def file_names(username: str, server: str, folder: str) -> set[str]:
+    """The names of the files directly in `folder` (relative to the user's home); none while the
+    folder does not exist. The server must be running."""
+    async with _notebook_server(username, server) as notebook_server:
+        r = await notebook_server.get(_contents_url(username, server, folder), params={"type": "directory", "content": "1"})
+    if r.status_code == 404:
+        return set()
+    r.raise_for_status()
+    return {entry["name"] for entry in r.json().get("content") or [] if entry.get("type") != "directory"}
+
+
 async def get_file(username: str, server: str, path: str, max_bytes: int) -> bytes | None:
     """The file as it is saved in the user's home right now, or None when it is not there.
     Raises FileTooLarge instead of reading a file bigger than `max_bytes`."""

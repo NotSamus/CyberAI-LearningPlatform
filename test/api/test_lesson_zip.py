@@ -78,7 +78,7 @@ def otter(monkeypatch):
     """Stands in for the grading service: every notebook Otter prepares has questions of 2 and 3 points."""
     prepared = []
 
-    async def prepare(master, name, gpu):
+    async def prepare(master, name, gpu, data):
         prepared.append(name)
         return notebook_file("def square(x):\n    ..."), b"the autograder package"
 
@@ -115,7 +115,7 @@ def test_a_lesson_goes_out_as_a_zip_and_comes_back_in(people, db):
     contents = json.loads(files["lessons.json"])
     assert (contents["format"], contents["version"], contents["lessons"]) == ("cyberai-lessons", 1, ["01-tls-basics/lesson.json"])
     assert contents["notebooks"] == [
-        {"file": "notebooks/loops-1/lab.ipynb", "title": "Loops", "description": "For loops.", "requires_gpu": False, "points": 10.0},
+        {"file": "notebooks/loops-1/lab.ipynb", "title": "Loops", "description": "For loops.", "requires_gpu": False, "points": 10.0, "data": []},
     ]
     lesson = json.loads(files["01-tls-basics/lesson.json"])
     assert (lesson["title"], lesson["summary"]) == ("TLS basics", "What TLS is for.")
@@ -187,7 +187,7 @@ def test_nothing_is_imported_when_the_grading_service_is_down(people, db, otter,
     content = export(teacher).content
     teacher.delete("/api/teach/assignments/1")
 
-    async def unreachable(master, name, gpu):
+    async def unreachable(master, name, gpu, data):
         raise grading.GraderUnreachable("down")
 
     monkeypatch.setattr(grading, "prepare", unreachable)

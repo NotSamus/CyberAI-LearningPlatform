@@ -57,7 +57,8 @@ def is_otter_master(notebook: bytes) -> bool:
     )
 
 
-async def _ask_grader(path: str, name: str, gpu: bool, files: dict[str, bytes]) -> dict:
+async def _ask_grader(path: str, name: str, gpu: bool, files: list[tuple[str, tuple[str, bytes]]]) -> dict:
+    """`files`: the form's file fields, as (field, (file name, contents)); a field may come more than once."""
     try:
         async with httpx.AsyncClient(base_url=config.GRADER_URL, timeout=GRADER_TIMEOUT) as grader:
             r = await grader.post(
@@ -79,27 +80,31 @@ async def _ask_grader(path: str, name: str, gpu: bool, files: dict[str, bytes]) 
     raise GradingError(str(detail) if r.status_code == 400 and detail else f"The grading service returned an error ({r.status_code}).")
 
 
-async def autograded_fields(notebook: bytes, name: str, gpu: bool) -> dict:
+async def autograded_fields(notebook: bytes, name: str, gpu: bool, data: dict[str, bytes] | None = None) -> dict:
     """What an uploaded notebook adds to its assignment (app.assignments.create) when it is written
     in Otter Assign format: the version for students, the autograder package and each question's
-    points. Nothing for any other notebook, which is graded by hand."""
+    points. Nothing for any other notebook, which is graded by hand. `data`: the assignment's data
+    files (name -> contents), which Otter needs beside the notebook to run it."""
     if not is_otter_master(notebook):
         return {}
-    student, autograder = await prepare(notebook, name, gpu)
+    student, autograder = await prepare(notebook, name, gpu, data or {})
     points = await question_points(student, autograder, name, gpu)
     return {"notebook": student, "master": notebook, "autograder": autograder, "question_points": points, "points": sum(points.values())}
 
 
-async def prepare(master: bytes, name: str, gpu: bool) -> tuple[bytes, bytes]:
+async def prepare(master: bytes, name: str, gpu: bool, data: dict[str, bytes]) -> tuple[bytes, bytes]:
     """(the notebook for students, the autograder package). Otter runs the notebook's own solutions
-    against its tests while preparing, and refuses a notebook whose solutions do not pass."""
-    answer = await _ask_grader("/prepare", name, gpu, {"notebook": master})
+    against its tests while preparing, and refuses a notebook whose solutions do not pass. The data
+    files go beside the notebook there, and into the autograder package, which puts them beside each
+    submission it grades."""
+    files = [("notebook", (name, master)), *(("data", (file_name, content)) for file_name, content in data.items())]
+    answer = await _ask_grader("/prepare", name, gpu, files)
     return base64.b64decode(answer["student"]), base64.b64decode(answer["autograder"])
 
 
 async def grade(notebook: bytes, autograder: bytes, name: str, gpu: bool) -> dict:
     """Otter's results for a submitted notebook: {"tests": [{name, score, max_score, visibility, output}, ...]}."""
-    results = (await _ask_grader("/grade", name, gpu, {"notebook": notebook, "autograder": autograder}))["results"]
+    results = (await _ask_grader("/grade", name, gpu, [("notebook", (name, notebook)), ("autograder", ("autograder.zip", autograder))]))["results"]
     if not isinstance(results, dict) or not isinstance(results.get("tests", []), list):
         raise GradingError("Otter's results could not be read.", str(results)[:2000])
     return results

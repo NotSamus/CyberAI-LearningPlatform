@@ -11,13 +11,14 @@ from app import admin, assignments, auth, config, exports, lesson_routes, lesson
 from app.jupyter import launch, oauth
 
 # How large a request may be. Nearly everything sent here is a few lines of JSON; the exceptions
-# are a teacher uploading a notebook, a picture for a lesson, or lessons exported as a .zip.
+# are a teacher uploading a notebook or its data files, a picture for a lesson, or lessons exported as a .zip.
 # Anything bigger is cut off while it arrives, logged in or not, so nobody can fill the server's
 # memory or disk with one request.
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = assignments.MAX_NOTEBOOK_BYTES + 1024 * 1024
 LARGER_REQUESTS = {
-    ("POST", "/api/teach/assignments"): MAX_UPLOAD_REQUEST_BYTES,
+    ("POST", "/api/teach/assignments"): MAX_UPLOAD_REQUEST_BYTES + assignments.MAX_DATA_BYTES,     # a notebook and its data files
+    ("POST", "/api/teach/assignments/{id}/data-files"): assignments.MAX_DATA_BYTES + 1024 * 1024,
     ("PUT", "/api/teach/assignments/{id}/notebook"): MAX_UPLOAD_REQUEST_BYTES,
     ("POST", "/api/teach/lesson-images"): lessons.MAX_IMAGE_BYTES + 1024 * 1024,
     ("POST", "/api/teach/lesson-imports"): lesson_zip.MAX_FILE_BYTES + 1024 * 1024,

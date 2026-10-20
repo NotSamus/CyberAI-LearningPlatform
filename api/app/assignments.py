@@ -4,8 +4,12 @@ A teacher uploads an .ipynb file and it is stored in the database, as a draft gi
 A student sees an assignment once it is published and given to them: to every student, to a course
 they are in, or to them by name. Teachers and admins see all of them.
 
+An assignment can have data files (datasets) beside its notebook. Each student gets a copy of them
+too, in the same folder, so the notebook opens them by name; an autograded assignment's autograder
+package carries them as well (Otter's `files`, see grader/main.py), so it grades without a network.
+
 The teacher API that creates and changes assignments is app/teach.py. Students open them through
-app/jupyter/launch.py, which puts a copy of the notebook into their Jupyter home.
+app/jupyter/launch.py, which puts a copy of the notebook and its data files into their Jupyter home.
 """
 import re
 import secrets
@@ -18,13 +22,18 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.jupyter.deps import PlatformUser
-from app.models import Assignment, AssignmentOpen, AssignmentStudent, CourseStudent, Submission, User
+from app.models import Assignment, AssignmentFile, AssignmentOpen, AssignmentStudent, CourseStudent, Submission, User
 
 MAX_NOTEBOOK_BYTES = 10 * 1024 * 1024      # room for plots and images in the outputs
 MAX_SUBMISSION_BYTES = 2 * MAX_NOTEBOOK_BYTES   # a student's copy grows as they run it
 MAX_POINTS = 10_000
 MAX_TITLE_LENGTH = 120
 MAX_DESCRIPTION_LENGTH = 2000
+MAX_DATA_FILES = 20
+# All of an assignment's data files together. Each student gets a copy, and an autograded assignment's
+# autograder package carries them: the grading service reads back at most 64 MB of it
+# (MAX_OUTPUT_BYTES in grader/main.py), so this stays well under that.
+MAX_DATA_BYTES = 50 * 1024 * 1024
 
 
 class AssignmentError(ValueError):
@@ -212,6 +221,64 @@ def check_notebook(data: bytes, max_bytes: int | None = None) -> None:
         raise AssignmentError("This notebook is in an old format. Open it in Jupyter, save it, and upload it again.")
 
 
+# A data file's name: what the notebook opens beside itself, so it is kept as it is, never changed into
+# something else. Letters, digits, dots, dashes, underscores and spaces; never a path.
+_DATA_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._ -]{0,98}[A-Za-z0-9._-])?")
+
+
+def data_file_name(filename: str) -> str:
+    """The name an uploaded data file is kept under: the file's own name, without any folders."""
+    return re.split(r"[/\\]", filename or "")[-1]
+
+
+def check_data_files(files: dict[str, bytes], notebook_name: str) -> dict[str, bytes]:
+    """An assignment's data files (name -> contents), refused when they cannot go beside its notebook:
+    names that are not plain file names, a notebook (Otter grades the one .ipynb beside the tests), a
+    name Otter uses there, or more than the limits."""
+    if len(files) > MAX_DATA_FILES:
+        raise AssignmentError(f"An assignment has at most {MAX_DATA_FILES} data files. Put many small files in one .zip.")
+    stem = notebook_name.lower().removesuffix(".ipynb")
+    for name in files:
+        lowered = name.lower()
+        if not _DATA_NAME.fullmatch(name):
+            raise AssignmentError(
+                f'"{name[:100]}" cannot be a data file\'s name: rename it with letters, digits, dots, dashes, underscores and '
+                "spaces only, starting with a letter or digit (and change the name in the notebook too)."
+            )
+        if lowered.endswith(".ipynb"):
+            raise AssignmentError(f"{name} is a notebook: upload it as an assignment of its own, not as a data file.")
+        if lowered in (notebook_name.lower(), "tests", "dist") or lowered.startswith(f"{stem}-autograder_"):
+            raise AssignmentError(f"{name} cannot be a data file's name here: the notebook or the autograder uses it. Rename the file.")
+    if sum(len(data) for data in files.values()) > MAX_DATA_BYTES:
+        raise AssignmentError(
+            f"The data files come to more than {MAX_DATA_BYTES // (1024 * 1024)} MB together. Each student gets a copy: "
+            "make them smaller, or leave some out."
+        )
+    return files
+
+
+def data_files(db: Session, assignment_id: int) -> list[dict]:
+    """The assignment's data files, by name, with their sizes (not their contents)."""
+    rows = db.execute(
+        select(AssignmentFile.name, AssignmentFile.size).where(AssignmentFile.assignment_id == assignment_id).order_by(AssignmentFile.name)
+    )
+    return [{"name": row.name, "size": row.size} for row in rows]
+
+
+def data_bytes(db: Session, assignment_id: int, names: list[str] | None = None) -> dict[str, bytes]:
+    """name -> contents of the assignment's data files (only `names`, when given)."""
+    query = select(AssignmentFile.name, AssignmentFile.data).where(AssignmentFile.assignment_id == assignment_id)
+    if names is not None:
+        query = query.where(AssignmentFile.name.in_(names))
+    return {row.name: row.data for row in db.execute(query.order_by(AssignmentFile.name))}
+
+
+def _store_data(db: Session, assignment_id: int, files: dict[str, bytes]) -> None:
+    """Replaces the assignment's data files with these. Does not commit."""
+    db.execute(delete(AssignmentFile).where(AssignmentFile.assignment_id == assignment_id))
+    db.add_all(AssignmentFile(assignment_id=assignment_id, name=name, size=len(data), data=data) for name, data in sorted(files.items()))
+
+
 def _folder_name(title: str, assignment_id: int) -> str:
     """The assignment's folder in students' homes, e.g. "Python basics", id 7 -> "python-basics-7".
     The id makes it one of a kind for good: a folder name is never used again after its assignment
@@ -238,14 +305,17 @@ def create(
     autograder: bytes | None = None,
     points: float | None = None,
     question_points: dict[str, float] | None = None,
+    data_files: dict[str, bytes] | None = None,
     commit: bool = True,
 ) -> Assignment:
     """`master`, `autograder` and `question_points` are given for an autograded assignment (see
     app/grading.py); `notebook` is then the version Otter made for students. `commit=False` leaves
-    the commit to the caller, which is adding more in the same go (app/lesson_zip.py)."""
+    the commit to the caller, which is adding more in the same go (app/lesson_zip.py). `data_files`
+    (name -> contents) go beside the notebook; Otter must have had them too for an autograded one."""
     title = check_title(title)
     notebook_name = safe_notebook_name(filename)
     check_notebook(notebook)
+    check_data_files(data_files or {}, notebook_name)
     assignment = Assignment(
         slug=secrets.token_hex(16),         # placeholder: the real one needs the id, known after the insert
         title=title,
@@ -266,6 +336,7 @@ def create(
     db.add(assignment)
     db.flush()
     assignment.slug = _folder_name(title, assignment.id)
+    _store_data(db, assignment.id, data_files or {})
     if commit:
         db.commit()
     return assignment
@@ -289,10 +360,12 @@ def replace_notebook(
     autograder: bytes | None = None,
     points: float | None = None,
     question_points: dict[str, float] | None = None,
+    data_files: dict[str, bytes] | None = None,
 ) -> Assignment:
     """Puts a new notebook in place of the assignment's own, taken in as `create` takes it: autograded
     when `autograder` is given, otherwise graded by hand. Only while no student has it
     (a_student_has_it): a student's copy is never changed, and would no longer match the tests.
+    `data_files`, when given, replace the assignment's data files the same way (None keeps them).
 
     The assignment's row stays locked until the commit, and recording a student's open waits for
     that (it refers to the row). app/jupyter/launch.py records the open before it copies the
@@ -306,6 +379,8 @@ def replace_notebook(
     if a_student_has_it(db, assignment_id):
         raise NotebookLocked()
     check_notebook(notebook)
+    if data_files is not None:
+        _store_data(db, assignment_id, check_data_files(data_files, safe_notebook_name(filename)))
     if autograder is None:
         # Graded by hand: out of what the teacher set, or out of the default when the tests had set it
         points = None if assignment.autograded else assignment.points

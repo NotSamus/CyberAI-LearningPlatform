@@ -15,7 +15,7 @@ api/app/models.py              database tables: users, login sessions, courses, 
 api/app/auth.py                accounts, password hashing, login/logout, changing your password, limit on password guessing
 api/app/admin.py               admin-only API behind Admin > Accounts (add, edit, new password, admin rights, remove)
 api/app/manage.py              command line tool: create accounts, grant admin, reset passwords, import a notebook
-api/app/assignments.py         assignments: who sees which, who opened what, checks on uploaded notebooks
+api/app/assignments.py         assignments: who sees which, who opened what, checks on uploaded notebooks and their data files
 api/app/courses.py             courses (groups of students) and announcements
 api/app/submissions.py         submissions and grades; has the autograder grade them in the background
 api/app/grading.py             talks to the grading service; reads Otter-Grader's notebooks and results
@@ -27,7 +27,7 @@ api/app/exports.py             students' progress and grades as CSV or Excel, fo
 api/app/jupyter/               OAuth2 provider for JupyterHub, hub REST client, launch and submit API (copies notebooks to and from students)
 grader/                        grading service: runs Otter-Grader in throwaway locked-down containers (its own Docker image)
 sql/                           Alembic database migrations (see sql/README.md)
-test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading, lessons, lesson .zip files, exports), test/sql (migrations)
+test/                          pytest suite: test/api (API, login attacks, assignments, data files, courses, grading, lessons, lesson .zip files, exports), test/sql (migrations)
 frontend/                      Next.js + TypeScript app: login, Home (what to do next, lessons and assignments by course),
                                lesson page, notebook page with iframe and Submit, Teach (/teach), Admin (/admin), My account
 assignments/<id>/              example notebooks to import, one of them autograded (see Assignments below)
@@ -399,7 +399,7 @@ What is in the `.zip` (format version 1, `api/app/lesson_zip.py`):
 lessons.json                          the lessons in order, and each notebook's title, description, points
 01-tls-basics/lesson.json             a lesson: title, summary, blocks
 01-tls-basics/images/1.png            its pictures
-notebooks/python-basics-lab-1/lab1.ipynb   the notebooks the lessons link to
+notebooks/python-basics-lab-1/lab1.ipynb   the notebooks the lessons link to, each with its data files beside it
 README.txt                            what the file is
 ```
 
@@ -425,6 +425,27 @@ The first time a student opens an assignment, the backend puts their own copy of
 Jupyter home at `assignments/<folder>/<file>.ipynb`, through that student's running notebook server.
 It is never overwritten after that: the file is the student's work. Deleting an assignment removes it
 (with its submissions and grades) from the platform, not from the homes of students who already opened it.
+
+### Data files (datasets)
+
+An assignment can have **data files** that go with its notebook: a CSV, JSON, images, a `.zip` of many
+files, anything the notebook opens. Add them under **Data files (optional)** on Upload notebook, or later in
+the **Files** section of the assignment's Settings tab (where each can also be downloaded or removed).
+
+- Each student gets **their own copy**, beside the notebook in `assignments/<folder>/`, the first time they
+  open the assignment, so the notebook opens them by name: `pd.read_csv("ports.csv")`. A copy already in
+  their folder is never overwritten (they may have changed it); one they deleted comes back the next time
+  they open the assignment. The teacher's **Edit in JupyterLab** copy gets them too.
+- An **autograded** notebook is prepared by Otter with its data files beside it, and they go into its
+  autograder (Otter's `files:` list, which the grading service adds to the ASSIGNMENT CONFIG cell), so
+  submissions are graded with them even though grading has no network. If your ASSIGNMENT CONFIG already has
+  a `files:` list, it must name every data file. Every change of the data files has Otter prepare the
+  notebook again.
+- Like the notebook, they can be changed only until the first student opens the assignment.
+- Limits: 20 files and 50 MB per assignment together (every student gets a copy, and the autograder carries
+  them). Names are kept as they are, since the notebook uses them: letters, digits, dots, dashes, underscores
+  and spaces, starting with a letter or digit; never a folder (put a folder in a `.zip`), never a `.ipynb`.
+- They are stored in Postgres with the notebook (`assignment_files`), so the database backup covers them.
 
 Home shows each student their lessons and assignments by course. Each assignment has its status:
 Not started, Opened, Overdue, Submitted, Grading or the score. An assignment's page says in three steps
@@ -526,14 +547,17 @@ python -m app.manage import-assignment ../assignments/hello-gpu/lab1.ipynb --tit
 python -m app.manage import-assignment ../assignments/otter-example/functions.ipynb --title "Functions lab"   # autograded
 ```
 
-`--publish` gives it to every student at once; without it the notebook is a draft.
+`--publish` gives it to every student at once; without it the notebook is a draft. `--data FILE` (once per
+file) adds a data file beside the notebook.
 
 ## Security checks
 
 Uploads are checked on the server: the file must be a real notebook (validated with `nbformat`) and its
 name is reduced to a plain file name. Requests are limited to 1 MB, except a teacher's notebook upload
-(11 MB), a picture for a lesson (6 MB) and a `.zip` of lessons to import (101 MB), which are only read
-after the account has been checked (`LimitRequestSize` in `api/app/main.py`).
+(11 MB, or 61 MB with data files), data files added later (51 MB), a picture for a lesson (6 MB) and a
+`.zip` of lessons to import (101 MB), which are only read after the account has been checked
+(`LimitRequestSize` in `api/app/main.py`). Data file names are refused rather than changed when they are
+not plain names (no folders, no `..`), and students only ever get them as copies in their own homes.
 
 A lessons `.zip` is never unpacked to disk: only the files its `lessons.json` names are read, by plain
 names (no `..`, no leading `/`), each with its own limit (a picture 5 MB, a notebook 10 MB) and 300 MB
@@ -564,8 +588,8 @@ student's notebook server, where code the student runs could read it. To put a n
 student's home, or take a submission out of it, the backend has the hub make a token that opens only
 that one server for two minutes, and deletes it afterwards (`test/api/test_hub_client.py`).
 
-Current limits: an assignment is one notebook file (no extra data files) and its file cannot be replaced
-once a student has opened it. Every teacher manages every course and assignment. Only the newest submission of a student
+Current limits: an assignment is one notebook file (with up to 50 MB of data files beside it), and neither
+can be changed once a student has opened it. Every teacher manages every course and assignment. Only the newest submission of a student
 is kept. Otter runs the student's code and the tests in one process, so a student's code can read the
 hidden tests there and influence its own autograder score within the assignment's questions (the
 platform counts only those questions, none for more than the points read from the teacher's tests at

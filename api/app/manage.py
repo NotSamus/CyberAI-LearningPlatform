@@ -5,7 +5,7 @@
     python -m app.manage set-admin USERNAME [--remove]
     python -m app.manage set-password USERNAME
     python -m app.manage list-users
-    python -m app.manage import-assignment FILE.ipynb --title "Title" [--description "..."] [--gpu] [--publish]
+    python -m app.manage import-assignment FILE.ipynb --title "Title" [--description "..."] [--data FILE ...] [--gpu] [--publish]
 
 Students have a username and no name: --name is for teachers only. --random makes up a username
 nobody has yet, like "swiftfalcon482" (app/usernames.py), and prints it.
@@ -82,17 +82,20 @@ def run(args: argparse.Namespace, db: Session) -> None:
             notebook = Path(args.file).read_bytes()
         except OSError as e:
             sys.exit(f"Cannot read {args.file}: {e.strerror}.")
+        data = {}
+        for path in args.data:
+            try:
+                data[Path(path).name] = Path(path).read_bytes()
+            except OSError as e:
+                sys.exit(f"Cannot read {path}: {e.strerror}.")
         name = assignments.safe_notebook_name(Path(args.file).name)
         assignments.check_notebook(notebook)
-        autograding = {}
-        if grading.is_otter_master(notebook):       # as the upload in the site does: Otter makes the students' version
-            student, autograder = asyncio.run(grading.prepare(notebook, name, args.gpu))
-            points = asyncio.run(grading.question_points(student, autograder, name, args.gpu))
-            autograding = dict(master=notebook, autograder=autograder, question_points=points, points=sum(points.values()))
-            notebook = student
+        assignments.check_data_files(data, name)
+        # As the upload in the site does: Otter makes the students' version of an Otter Assign notebook.
+        fields = {"notebook": notebook, **asyncio.run(grading.autograded_fields(notebook, name, args.gpu, data))}
         assignment = assignments.create(
-            db, title=args.title, description=args.description, requires_gpu=args.gpu,
-            filename=name, notebook=notebook, published=args.publish, for_everyone=args.publish, **autograding,
+            db, title=args.title, description=args.description, requires_gpu=args.gpu, filename=name,
+            published=args.publish, for_everyone=args.publish, data_files=data, **fields,
         )
         state = "published to every student" if assignment.published else "a draft: publish it in Settings > Assignments"
         kind = "autograded" if assignment.autograded else "graded by hand"
@@ -124,6 +127,7 @@ def main(argv: list[str] | None = None) -> None:
     imported.add_argument("file", help="path to the .ipynb file")
     imported.add_argument("--title", required=True)
     imported.add_argument("--description", default="")
+    imported.add_argument("--data", action="append", default=[], metavar="FILE", help="a data file that goes beside the notebook (repeat for more)")
     imported.add_argument("--gpu", action="store_true", help="opens in the GPU environment")
     imported.add_argument("--publish", action="store_true", help="give it to every student now (default: a draft)")
 

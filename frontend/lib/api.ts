@@ -65,7 +65,23 @@ export type ManagedAssignment = Assignment & {
   created_at: string;
   counts?: AssignmentCounts;  // in the list of assignments (GET /teach/assignments) only
   notebook_locked?: boolean;  // a student has opened it, so its notebook can no longer be replaced (not in the list)
+  data_files?: DataFile[];    // datasets beside the notebook: each student gets a copy (not in the list)
 };
+
+// A data file that goes with an assignment's notebook (api/app/assignments.py). Limits: as there.
+export type DataFile = { name: string; size: number };
+export const MAX_DATA_FILES = 20;
+export const MAX_DATA_BYTES = 50 * 1024 * 1024;
+
+// A quick answer on data files about to be uploaded (`already`: the bytes of those the assignment
+// keeps); the server enforces the same limits and also checks the names (check_data_files there).
+export function dataProblem(files: { size: number }[], already: { size: number }[] = []): string {
+  if (files.length + already.length > MAX_DATA_FILES) return `An assignment has at most ${MAX_DATA_FILES} data files. Put many small files in one .zip.`;
+  if ([...files, ...already].reduce((sum, f) => sum + f.size, 0) > MAX_DATA_BYTES) {
+    return `The data files come to more than ${MAX_DATA_BYTES / (1024 * 1024)} MB together. Each student gets a copy: make them smaller, or leave some out.`;
+  }
+  return "";
+}
 
 // One row of an assignment's gradebook.
 export type StudentProgress = Student & { opened_at: string | null; submission: Submission | null };

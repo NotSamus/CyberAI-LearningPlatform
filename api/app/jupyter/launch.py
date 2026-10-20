@@ -1,5 +1,6 @@
 """Platform API used by the Next.js frontend: who am I, my assignments (with my progress on each)
 and announcements, open and stop a notebook, submit it."""
+import asyncio
 from contextlib import contextmanager
 from urllib.parse import quote
 
@@ -32,6 +33,28 @@ def visible_assignment(
     if assignment is None:
         raise HTTPException(404, "No such assignment.")
     return assignment
+
+
+# Data files being copied into people's homes at once. Each copy holds the assignment's data files in
+# memory (up to assignments.MAX_DATA_BYTES), so a class opening the same assignment together waits a
+# little rather than filling the backend's memory. The notebook itself is copied outside this.
+_DATA_COPIES = asyncio.Semaphore(4)
+
+
+async def copy_data_files(db: Session, hub_username: str, server: str, folder: str, assignment_id: int) -> None:
+    """Puts the assignment's data files that are not in `folder` (in that person's home) yet into it.
+    One that is there already stays as it is: it is theirs, and they may have changed it. One they
+    deleted comes back the next time they open the assignment."""
+    names = [file["name"] for file in await run_in_threadpool(assignments.data_files, db, assignment_id)]
+    if not names:
+        return
+    there = await hub_client.file_names(hub_username, server, folder)
+    missing = [name for name in names if name not in there]
+    if not missing:
+        return
+    async with _DATA_COPIES:
+        for name, content in (await run_in_threadpool(assignments.data_bytes, db, assignment_id, missing)).items():
+            await hub_client.put_file(hub_username, server, f"{folder}/{name}", content)
 
 
 def server_for(assignment: Assignment) -> str:
@@ -154,6 +177,7 @@ async def launch(
         if not await hub_client.has_file(user.hub_username, server, path):
             notebook = await run_in_threadpool(assignments.notebook_bytes, db, assignment.id)
             await hub_client.put_file(user.hub_username, server, path, notebook)
+        await copy_data_files(db, user.hub_username, server, path.rsplit("/", 1)[0], assignment.id)
     return {"ready": True, "profile": server, "url": notebook_url(user, server, path)}
 
 

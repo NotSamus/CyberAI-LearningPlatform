@@ -91,6 +91,21 @@ class Assignment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class AssignmentFile(Base):
+    """A data file that goes with an assignment's notebook (a dataset, say). Each student gets a copy
+    beside the notebook in their Jupyter home when they open the assignment, and an autograded
+    assignment's autograder package carries it too (see app/assignments.py)."""
+    __tablename__ = "assignment_files"
+    __table_args__ = (UniqueConstraint("assignment_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))                      # a plain file name, as the notebook opens it
+    size: Mapped[int] = mapped_column()                                 # bytes
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AssignmentStudent(Base):
     """The students an assignment was given to one by one (used when it is not `for_everyone`)."""
     __tablename__ = "assignment_students"

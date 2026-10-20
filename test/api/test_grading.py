@@ -77,7 +77,7 @@ def otter(monkeypatch):
     """Stands in for the grading service. A submission scores full marks when it contains "x * x"."""
     jobs = {"prepared": [], "graded": []}
 
-    async def prepare(master, name, gpu):
+    async def prepare(master, name, gpu, data):
         jobs["prepared"].append(name)
         return student_version(), b"the autograder package"
 
@@ -138,7 +138,7 @@ def test_an_otter_notebook_becomes_an_autograded_assignment(people, hub, otter, 
 def test_a_notebook_otter_cannot_prepare_is_refused(people, db, monkeypatch):
     teacher, _, _ = people
 
-    async def solutions_fail(master, name, gpu):
+    async def solutions_fail(master, name, gpu, data):
         raise grading.GradingError("Otter stopped with an error.", "q1 - 1 result:\n    Test case failed")
 
     monkeypatch.setattr(grading, "prepare", solutions_fail)
@@ -146,7 +146,7 @@ def test_a_notebook_otter_cannot_prepare_is_refused(people, db, monkeypatch):
     assert r.status_code == 400
     assert "Otter could not prepare this notebook" in r.json()["detail"] and "Test case failed" in r.json()["detail"]
 
-    async def unreachable(master, name, gpu):
+    async def unreachable(master, name, gpu, data):
         raise grading.GraderUnreachable("The grading service is not reachable right now.")
 
     monkeypatch.setattr(grading, "prepare", unreachable)
@@ -154,7 +154,7 @@ def test_a_notebook_otter_cannot_prepare_is_refused(people, db, monkeypatch):
     assert r.status_code == 503 and "was not uploaded" in r.json()["detail"]
 
     # Otter made the students' version but cannot grade it: its questions' points are not known.
-    async def prepared(master, name, gpu):
+    async def prepared(master, name, gpu, data):
         return student_version(), b"the autograder package"
 
     async def cannot_grade(notebook, autograder, name, gpu):
@@ -475,7 +475,7 @@ def test_the_notebook_is_edited_in_the_teachers_jupyterlab(people, hub, otter, d
     assert hub[copy] == otter_master()
 
     # Otter refuses an edit whose solutions fail its tests: nothing changes.
-    async def solutions_fail(master, name, gpu):
+    async def solutions_fail(master, name, gpu, data):
         raise grading.GradingError("Otter stopped with an error.", "Test case failed")
     monkeypatch.setattr(grading, "prepare", solutions_fail)
     hub[copy] = otter_master().replace(b"x * x", b"x + x")

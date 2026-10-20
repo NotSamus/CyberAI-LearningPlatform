@@ -614,13 +614,35 @@ session; 3 (one address for every notebook server) needs a wildcard DNS name and
   platform for a course (linked to the existing notebook) and into an emptied platform (new draft
   assignment), the picture shown in the imported lesson, a refused export ("No such lesson." on the page)
   and a file that is not a .zip. Teach > Lessons and the dialog at 768, 1024 and 1440 px, light.
+- 2026-10-20, on the main checkout's `./dev.sh` (real grader and hub, dev database), as a throwaway
+  teacher `zip-teacher`; the test lessons and assignments were deleted afterwards. No bug found.
+  - Autograded notebook through the real grader: `assignments/otter-example/functions.ipynb` uploaded as
+    "Zip check: functions" (autograded, 5 points), linked from a lesson "TLS Basics", exported, lesson and
+    assignment deleted, the .zip imported in the dialog (~15 s). Otter ran again (grader log: /prepare,
+    /grade). The new assignment is autograded, 5 points (q1 2, q2 3), its master byte for byte the
+    original file (md5), the students' version different (solutions out); the lesson links to it.
+  - Large file through the dev proxy: a lesson with 9 random-noise pictures of 4.6 MB, exported in the
+    page (39.6 MB) and imported in the dialog at :3000: 201, all 9 pictures byte for byte the same. So
+    `middlewareClientMaxBodySize: "101mb"` works (before, 12 MB). The list's Export of 5 lessons made an
+    84 MB file through the proxy too.
+  - The three Export entries clicked in the dev browser, really saving into ~/Downloads (asked first):
+    the editor's ⋯ and a lesson's ⋯ save `tls-basics-2026-10-20.zip` (2209 bytes; the second replaced
+    the first, the pane does not add "(1)"), the list's Export `3-lessons-2026-10-20.zip` (1.2 MB, the
+    name by design for several lessons). Each opens as a lessons export (`unzip -l`).
+  - The file picker: picking `tls-basics-2026-10-20.zip` from Downloads in the OS picker (done by me
+    by hand) and importing it: 201, the lesson came in linked to the same "Zip check: functions" (same
+    title and file), no second assignment. Also the field's change path with a file put in from the page.
+  - Teach > Lessons, a lesson's ⋯ menu and the Import dialog (a file chosen, the "not a .zip" error) in
+    Standard dark, Halloween light and dark, Retro 95 light and dark at 1024 px, Retro 95 dark at 768:
+    readable, nothing overlapping, no sideways scroll. Themes set on the page only.
+  - Seen, not changed: during an import the drop area says "Uploading…" also while Otter runs.
+  - Left behind on purpose: the test teacher `zip-teacher` (id 34) in the dev database, and the two
+    files in ~/Downloads.
 
 ### Not verified
-- Clicking Export so that the browser saves the file (it would have written to Downloads): only the
-  request behind it was tried. Choosing the .zip with the file picker (it was dropped).
-- An autograded notebook through the real grader (the tests fake Otter), and a large file (only ~110 KB
-  and the tests' 1.5 MB picture were tried). Dark theme, Halloween and Retro 95.
-- Importing a file into the main checkout's dev database: on purpose, nothing here touched it.
+- A file close to the 100 MB limit (39.6 MB imported, 84 MB exported).
+- Importing an autograded notebook that needs a GPU, and the grader being down during a real import
+  (both only in the tests).
 
 ## Changing an assignment's notebook after upload (2026-10-19)
 - Asked how to add the grading (Otter's cells) to a notebook already uploaded. The assignment's
@@ -672,6 +694,54 @@ session; 3 (one address for every notebook server) needs a wildcard DNS name and
 - Not verified: pressing Light / Dark in Appearance (it would have saved to my account; the API is
   tested); the login page in the new versions; Halloween's bats sit over "Admin" in the bar at 768,
   as before in dark.
+
+
+## Data files (datasets) beside an assignment's notebook (2026-10-20)
+- Asked for: upload a dataset with the notebook "so the lesson runs with it", and each student has a copy.
+- Teach > Assignments > Upload notebook: **Data files (optional)**, several at once. The Settings tab's
+  **Files** section lists them (download), and until the first student opens the assignment: remove (asks
+  first) and **Add data files** (same name = replaces). Messages show under the list, not at the top.
+- Each student gets their own copy beside the notebook (`assignments/<slug>/`) when they open the
+  assignment (`copy_data_files` in `api/app/jupyter/launch.py`): only files they do not have, never
+  overwriting theirs, a deleted one comes back. At most 4 copies at once, so a class opening it together
+  does not fill the backend's memory. The teacher's Edit in JupyterLab copy gets them too.
+- Autograded: the grading service puts the data beside the notebook for `otter assign` and adds Otter's
+  `files:` list to the ASSIGNMENT CONFIG when the notebook has none, so the autograder zip carries them and
+  Otter copies them beside every submission (grading has no network). Its prepare script now copies
+  `<notebook>-autograder_*.zip`, not `*.zip`: Otter copies data files into dist/autograder too, so a
+  dataset .zip broke the old one. Every change of data files has Otter prepare the notebook again.
+- Decided (not asked): 20 files and 50 MB per assignment (every student gets a copy; the grader reads back
+  at most 64 MB); names kept as they are (refused, not renamed, when not plain: letters, digits, `. _ -`,
+  spaces); no folders (a .zip instead); locked once a student has it, like the notebook. Constants, not
+  settings in deploy/.env, for now.
+- Stored in Postgres: table `assignment_files` (migration `2026_10_20_1600-2e7c9b4d1f58`). Routes:
+  `POST /api/teach/assignments` takes `data` fields; `POST|GET|DELETE /api/teach/assignments/<id>/data-files[/<name>]`.
+  Command line: `import-assignment ... --data FILE`. Lesson .zip export carries them beside the notebook
+  (`"data"` in each notebook entry); import matches an existing assignment only with the same data files.
+- On the server: `git pull`, `docker compose up -d --build` (the grader changed), run the migration. With
+  `./dev.sh --lan`, restarting it does both.
+
+### Checked
+- 13 new tests (`test/api/test_assignment_files.py`): copies for a student, never overwritten, deleted one
+  back, locked after a student opened it, add/replace/remove, notebook replace keeps them, editing copy,
+  Otter given the data on upload and on each change (and a refusal keeps the old set), refused names and
+  limits, lesson .zip round trip, the `files:` the grader writes. Breaking the copy on launch or the data
+  sent to Otter makes them fail. All 179 backend tests, ruff, tsc and ESLint pass.
+- Real Otter 7.0.0 (the CyberP env, same version as the notebook image), running the grader's own steps:
+  `otter assign` with ports.csv and a .zip beside the notebook put both in the autograder zip, and grading
+  a filled-in student notebook in a folder with only the notebook and the autograder scored 2/2, a hidden
+  test checking the .zip was there.
+- In the browser (a copy of the frontend on :3013, its own backend and throwaway database): upload with two
+  data files, the Files list, a refused name, adding one, removing one; Upload and Settings at 768, 1024,
+  1440 px, light.
+
+### Not verified
+- A student opening it through a real JupyterHub (the tests use the stand-in hub), and a real grader
+  container (the steps were run with Otter on the Mac, not in Docker). The dev stack was in use by another
+  session.
+- Large data (only up to 1.2 MB was tried) and many students opening at once. Dark, Halloween and Retro 95.
+- The dev stack running on 2026-10-20 has the grader built before this change: an autograded notebook
+  with data files fails there ("Otter could not prepare") until `./dev.sh` is restarted (it rebuilds the grader).
 
 ## Ideas (not built)
 

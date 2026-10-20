@@ -64,7 +64,14 @@ docker compose exec backend alembic -c ../sql/alembic.ini upgrade head   # adds 
 
 Run the migration every time: a new version may need tables the old one did not have (lessons were
 added this way, the column that keeps each account's theme, and the one for its light or dark choice,
-2026-10-19), and until they exist the pages that use them answer with an error.
+2026-10-19, and the table of assignments' data files, 2026-10-20), and until they exist the pages that use
+them answer with an error.
+
+Data files (datasets beside an assignment's notebook, 2026-10-20) also changed the grading service, so
+`--build` must rebuild it too (`docker compose up -d --build` does). Nothing to set in `deploy/.env`. A
+notebook upload with data files may be up to 61 MB: Caddy lets that through as it is, but a proxy the
+university puts in front of this server must allow it. When the server runs `./dev.sh --lan` instead,
+restarting it applies the migration and rebuilds the grader by itself.
 
 New Python packages for the backend are listed in `api/requirements.txt` at exact versions, and
 `--build` installs them into its image. The export of students' progress and grades (Excel files,

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import FileDrop from "@/components/teach/FileDrop";
-import { api, type Course, type ManagedAssignment } from "@/lib/api";
+import { api, dataProblem, MAX_DATA_BYTES, MAX_DATA_FILES, type Course, type ManagedAssignment } from "@/lib/api";
 import { fromLocalInput } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import { useMe } from "@/lib/useMe";
@@ -25,6 +25,7 @@ export default function NewAssignmentPage({ searchParams }: { searchParams: Prom
   const [gpu, setGpu] = useState(false);
   const gpuOff = useMe()?.gpu_notebooks === false;       // GPU notebooks turned off for the platform
   const [file, setFile] = useState<File | null>(null);
+  const [data, setData] = useState<File[]>([]);           // data files that go beside the notebook
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,6 +42,11 @@ export default function NewAssignmentPage({ searchParams }: { searchParams: Prom
       setError("The notebook is larger than 10 MB. Clear its outputs and try again.");
       return;
     }
+    const problem = dataProblem(data);
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setBusy(true);
     const form = new FormData();
     form.set("title", title);
@@ -49,6 +55,7 @@ export default function NewAssignmentPage({ searchParams }: { searchParams: Prom
     const dueAt = fromLocalInput(due);
     if (dueAt) form.set("due_at", dueAt);
     form.set("file", file);
+    data.forEach((f) => form.append("data", f));
     try {
       // The server checks the file (a real notebook, at most 10 MB) and stores it as a draft. A
       // notebook written for Otter-Grader is prepared by Otter first, which runs it.
@@ -80,6 +87,13 @@ export default function NewAssignmentPage({ searchParams }: { searchParams: Prom
         )}
         <div className="full">
           <FileDrop accept=".ipynb" what="a .ipynb file" hint="A Jupyter notebook, up to 10 MB." file={file} required onFile={setFile} />
+        </div>
+        <div className="full field">
+          <span className="field-label">Data files (optional)</span>
+          <FileDrop
+            multiple what="data files" files={data} onFiles={setData}
+            hint={`Datasets the notebook opens by name (CSV, JSON, images, a .zip…). Each student gets a copy beside the notebook. Up to ${MAX_DATA_FILES} files, ${MAX_DATA_BYTES / (1024 * 1024)} MB in all.`}
+          />
         </div>
         <label>
           Title
