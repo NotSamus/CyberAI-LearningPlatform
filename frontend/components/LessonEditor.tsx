@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, CircleAlert, Copy, Eye, Plus, Send, Trash2, Undo2, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleAlert, Copy, Download, Eye, Plus, Send, Trash2, Undo2, Users, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import LessonRail, { leftLesson } from "@/components/LessonRail";
 import Markdown from "@/components/Markdown";
@@ -10,11 +10,11 @@ import PageHeader from "@/components/PageHeader";
 import { Label, publishLabel } from "@/components/Status";
 import FileDrop from "@/components/teach/FileDrop";
 import LessonTabs from "@/components/teach/LessonTabs";
-import { api, type Course, type ManagedAssignment } from "@/lib/api";
+import { api, download, type Course, type ManagedAssignment } from "@/lib/api";
 import { formatWhen } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import {
-  BLOCK_LABELS, BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, duplicate, importText, newId, outline, youtubeId,
+  BLOCK_LABELS, BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, duplicate, importText, lessonsZip, newId, outline, youtubeId,
   type Block, type Kind, type LessonDraft, type ManagedLesson, type Tone,
 } from "@/lib/lessons";
 
@@ -238,6 +238,16 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     if (await save()) router.push(`/lessons/${lessonId}`);
   }
 
+  // The lesson as it is on screen (saved first), as a .zip to import here or on another platform.
+  async function exportZip() {
+    if (!(await save())) return;
+    try {
+      await download(lessonsZip([Number(lessonId)]));
+    } catch (e) {
+      setError(`Not exported. ${message(e)}`);
+    }
+  }
+
   const upToDate = saving === "saved" && !lesson?.changed;
   // The lesson as it is on screen, for the list beside the editor, and the topics its headings make.
   const live = useMemo(
@@ -328,9 +338,13 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
             <button disabled={busy || (lesson.published && upToDate)} onClick={publish}>
               <Send aria-hidden />{busy ? "Publishing…" : lesson.published ? "Publish changes" : "Publish"}
             </button>
-            {lesson.published && (
-              <Menu label="More for this lesson" items={[{ label: "Unpublish", icon: Undo2, disabled: busy, onSelect: unpublish }]} />
-            )}
+            <Menu
+              label="More for this lesson"
+              items={[
+                { label: "Export as .zip", icon: Download, onSelect: exportZip },
+                ...(lesson.published ? [{ label: "Unpublish", icon: Undo2, disabled: busy, onSelect: unpublish }] : []),
+              ]}
+            />
           </>
         }
         tabs={tabs}

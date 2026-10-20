@@ -90,7 +90,8 @@ def audience(db: Session, assignment: Assignment) -> list[User]:
 # --- who has opened what --------------------------------------------------------------------------
 
 def record_open(db: Session, assignment_id: int, user_id: int) -> None:
-    """Remembers the first time this person opened this assignment."""
+    """Remembers the first time this person opened this assignment. Waits while its notebook is
+    being replaced (replace_notebook)."""
     db.execute(insert(AssignmentOpen).values(assignment_id=assignment_id, user_id=user_id).on_conflict_do_nothing())
     db.commit()
 
@@ -105,6 +106,17 @@ def opens_of(db: Session, assignment_id: int) -> dict[int, datetime]:
     """user id -> when they first opened this assignment."""
     rows = db.execute(select(AssignmentOpen.user_id, AssignmentOpen.opened_at).where(AssignmentOpen.assignment_id == assignment_id))
     return {row.user_id: row.opened_at for row in rows}
+
+
+def a_student_has_it(db: Session, assignment_id: int) -> bool:
+    """Whether a student has opened this assignment, and so has their own copy of its notebook, or
+    has handed one in. From then on its notebook can no longer be changed (replace_notebook).
+    Teachers trying it out do not count."""
+    students = select(User.id).where(User.role == "student")
+    return bool(db.scalar(select(or_(
+        exists().where(AssignmentOpen.assignment_id == assignment_id, AssignmentOpen.user_id.in_(students)),
+        exists().where(Submission.assignment_id == assignment_id, Submission.user_id.in_(students)),
+    ))))
 
 
 def counts(db: Session) -> dict[int, dict]:
@@ -226,9 +238,11 @@ def create(
     autograder: bytes | None = None,
     points: float | None = None,
     question_points: dict[str, float] | None = None,
+    commit: bool = True,
 ) -> Assignment:
     """`master`, `autograder` and `question_points` are given for an autograded assignment (see
-    app/grading.py); `notebook` is then the version Otter made for students."""
+    app/grading.py); `notebook` is then the version Otter made for students. `commit=False` leaves
+    the commit to the caller, which is adding more in the same go (app/lesson_zip.py)."""
     title = check_title(title)
     notebook_name = safe_notebook_name(filename)
     check_notebook(notebook)
@@ -252,6 +266,53 @@ def create(
     db.add(assignment)
     db.flush()
     assignment.slug = _folder_name(title, assignment.id)
+    if commit:
+        db.commit()
+    return assignment
+
+
+class NotebookLocked(AssignmentError):
+    def __init__(self):
+        super().__init__(
+            "A student has opened this assignment and has their own copy of its notebook, so the notebook can "
+            "no longer be changed. To hand out a corrected notebook, upload it as a new assignment."
+        )
+
+
+def replace_notebook(
+    db: Session,
+    assignment_id: int,
+    *,
+    filename: str,
+    notebook: bytes,
+    master: bytes | None = None,
+    autograder: bytes | None = None,
+    points: float | None = None,
+    question_points: dict[str, float] | None = None,
+) -> Assignment:
+    """Puts a new notebook in place of the assignment's own, taken in as `create` takes it: autograded
+    when `autograder` is given, otherwise graded by hand. Only while no student has it
+    (a_student_has_it): a student's copy is never changed, and would no longer match the tests.
+
+    The assignment's row stays locked until the commit, and recording a student's open waits for
+    that (it refers to the row). app/jupyter/launch.py records the open before it copies the
+    notebook, so a student either stops the replacing or gets the new notebook, never the old one
+    after it was replaced."""
+    assignment = db.scalar(
+        select(Assignment).where(Assignment.id == assignment_id).with_for_update().execution_options(populate_existing=True)
+    )
+    if assignment is None:
+        raise AssignmentError("This assignment was deleted.")
+    if a_student_has_it(db, assignment_id):
+        raise NotebookLocked()
+    check_notebook(notebook)
+    if autograder is None:
+        # Graded by hand: out of what the teacher set, or out of the default when the tests had set it
+        points = None if assignment.autograded else assignment.points
+    assignment.notebook_name = safe_notebook_name(filename)
+    assignment.notebook, assignment.master, assignment.autograder = notebook, master, autograder
+    assignment.autograded = autograder is not None
+    assignment.points, assignment.question_points = points, question_points
     db.commit()
     return assignment
 

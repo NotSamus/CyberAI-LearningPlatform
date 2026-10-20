@@ -22,10 +22,14 @@
 }
 @media (prefers-color-scheme: dark) {
   /* Darker than the page, with a line around it so that it does not melt into it */
-  :root {
+  :root:not([data-mode="light"]) {
     --code-bg: hsl(220, 18%, 5%);
     --code-edge: var(--edge);
   }
+}
+:root[data-mode="dark"] {             /* the same, when the account chose dark (see globals.css) */
+  --code-bg: hsl(220, 18%, 5%);
+  --code-edge: var(--edge);
 }
 
 /* --- Home --------------------------------------------------------------------------------------- */

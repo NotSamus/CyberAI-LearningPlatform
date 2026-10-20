@@ -46,6 +46,14 @@ Lessons are written in the site as well: **Teach > Lessons**. Their text, questi
 what students answered are stored in Postgres too, so the same database backup covers them. Videos in
 lessons are played from `www.youtube-nocookie.com`, so students' browsers must be able to reach YouTube.
 
+Lessons written on another platform (a laptop running `./dev.sh`, say) are brought over in the site,
+without touching the database: **Export** them there as a `.zip` (Teach > Lessons), then **Import** it
+here. They arrive as drafts with their pictures and the notebooks they link to; autograded notebooks go
+through the grading service again, so it must be running. The `.zip` holds the notebooks' solutions and
+the knowledge checks' answers: treat it like the teacher's own files. Nothing to set up: no new setting,
+no migration. An import may be up to 101 MB: Caddy lets that through as it is, but a proxy the university
+puts in front of this server must allow requests that large to `/api/teach/lesson-imports`.
+
 ### Updating a server that is already running
 
 ```bash
@@ -55,7 +63,8 @@ docker compose exec backend alembic -c ../sql/alembic.ini upgrade head   # adds 
 ```
 
 Run the migration every time: a new version may need tables the old one did not have (lessons were
-added this way, and the column that keeps each account's theme), and until they exist the pages that use them answer with an error.
+added this way, the column that keeps each account's theme, and the one for its light or dark choice,
+2026-10-19), and until they exist the pages that use them answer with an error.
 
 New Python packages for the backend are listed in `api/requirements.txt` at exact versions, and
 `--build` installs them into its image. The export of students' progress and grades (Excel files,

@@ -22,6 +22,10 @@
 .filters label { display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--t-sm); font-weight: var(--bold); }
 .filters select { padding: var(--s1) var(--s3); }
 .filters > .muted { font-size: var(--t-sm); }
+.filters > .push { margin-left: auto; }     /* an action on the list shown (Export), at the end of the line */
+
+/* What Import made, in its dialog: the lessons, and what the file left out */
+.import-list { display: grid; gap: var(--s1); margin: 0; padding-left: var(--s5); }
 
 /* A section with nothing in it: one quiet line */
 .quiet { display: flex; align-items: center; gap: var(--s2); margin: 0; padding: var(--s4) var(--s5); background: var(--card); color: var(--muted); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--t-sm); }
@@ -216,3 +220,12 @@ label.file-drop:has(input:disabled) { color: var(--muted); cursor: progress; }
 /* A save of the lesson that failed, in a corner of the screen while writing (the header may be out of view) */
 .save-failed { position: fixed; z-index: 4; right: var(--s5); bottom: var(--s5); display: flex; align-items: center; gap: var(--s2); margin: 0; padding: var(--s3) var(--s4); background: var(--card); color: var(--error); border: 1px solid var(--edge); border-left: 4px solid var(--error); border-radius: var(--radius); box-shadow: var(--shadow-3); font-size: var(--t-sm); }
 .save-failed .text-button { margin-left: var(--s2); font-weight: var(--bold); }
+
+/* --- An assignment's Settings: changing its notebook (edit in JupyterLab, or upload another) ------ */
+.change-notebook { display: grid; gap: var(--s5); max-width: var(--w-text); height: auto; }
+.change-notebook > * + * { padding-top: var(--s5); border-top: 1px solid var(--border); }
+.change-notebook h3 { margin: 0 0 var(--s2); }
+.change-notebook p { margin: 0 0 var(--s4); }
+.change-notebook form { display: grid; gap: var(--s4); }
+.change-notebook form h3 { margin: 0; }
+.change-notebook code { overflow-wrap: anywhere; }

@@ -64,10 +64,15 @@
   --warn-tint: hsl(50, 100%, 92%);
   --warn-line: hsl(48, 96%, 50%);       /* stripes only, never text */
 }
+/* Light or dark: as the device is set, unless the account chose one (My account > Appearance sets
+   <html data-mode="light|dark">, lib/themes.ts). So the dark colours are written twice, once for each
+   way of getting them: keep the two blocks the same (test/test_themes_css.py checks it). */
+:root[data-mode="light"] { color-scheme: light; }
+:root[data-mode="dark"] { color-scheme: dark; }
 @media (prefers-color-scheme: dark) {
   /* Not the light colours turned around: surfaces get lighter as they come closer, and shadows
      hardly show, so cards also get a line around them. */
-  :root {
+  :root:not([data-mode="light"]) {
     --bg: hsl(220, 16%, 7%);
     --card: hsl(220, 15%, 12%);
     --tint: hsl(220, 14%, 18%);
@@ -94,6 +99,33 @@
     --bar-edge: hsl(217, 25%, 24%);
     --spark: hsl(187, 80%, 60%);
   }
+}
+:root[data-mode="dark"] {
+  --bg: hsl(220, 16%, 7%);
+  --card: hsl(220, 15%, 12%);
+  --tint: hsl(220, 14%, 18%);
+  --edge: hsl(217, 13%, 19%);
+  --text: hsl(220, 19%, 94%);
+  --muted: hsl(215, 12%, 65%);
+  --border: hsl(217, 13%, 19%);
+  --border-strong: hsl(216, 10%, 50%);
+  --accent: hsl(227, 100%, 71%);
+  --accent-hover: hsl(227, 100%, 77%);
+  --accent-text: hsl(223, 24%, 6%);
+  --gpu: hsl(151, 50%, 53%);
+  --error: hsl(3, 70%, 83%);
+  --bad-tint: hsl(3, 30%, 16%);
+  --accent-tint: hsl(226, 35%, 17%);
+  --good-tint: hsl(152, 30%, 14%);
+  --info: hsl(227, 100%, 71%);
+  --warn: hsl(50, 90%, 70%);
+  --warn-tint: hsl(48, 35%, 13%);
+  --warn-line: hsl(48, 80%, 45%);
+  --navy: hsl(217, 40%, 13%);         /* the bar: barely lighter than the page, so it gets a line under it */
+  --bar-hover: hsl(217, 35%, 22%);
+  --bar-line: hsl(216, 20%, 45%);
+  --bar-edge: hsl(217, 25%, 24%);
+  --spark: hsl(187, 80%, 60%);
 }
 
 /* --- Basics ------------------------------------------------------------------------------------- */

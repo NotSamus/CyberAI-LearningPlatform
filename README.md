@@ -22,11 +22,12 @@ api/app/grading.py             talks to the grading service; reads Otter-Grader'
 api/app/teach.py               teacher-only API behind Teach: assignments, courses, announcements, the gradebook
 api/app/lessons.py             lessons: their blocks, who sees which, knowledge checks (checked on the server), pictures
 api/app/lesson_routes.py       lessons over HTTP: the teacher API behind Teach > Lessons, and reading and answering for everyone
+api/app/lesson_zip.py          lessons as a .zip with their pictures and linked notebooks: export, and import here or on another platform
 api/app/exports.py             students' progress and grades as CSV or Excel, for one course or every student (teachers only)
 api/app/jupyter/               OAuth2 provider for JupyterHub, hub REST client, launch and submit API (copies notebooks to and from students)
 grader/                        grading service: runs Otter-Grader in throwaway locked-down containers (its own Docker image)
 sql/                           Alembic database migrations (see sql/README.md)
-test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading, lessons, exports), test/sql (migrations)
+test/                          pytest suite: test/api (API, login attacks, assignments, courses, grading, lessons, lesson .zip files, exports), test/sql (migrations)
 frontend/                      Next.js + TypeScript app: login, Home (what to do next, lessons and assignments by course),
                                lesson page, notebook page with iframe and Submit, Teach (/teach), Admin (/admin), My account
 assignments/<id>/              example notebooks to import, one of them autograded (see Assignments below)
@@ -369,6 +370,43 @@ When a published change alters what counts as right in a question (its options o
 removes the question, students' earlier answers to it are deleted and they are asked again. Fixing a typo
 in the question or in an option's text keeps them.
 
+### Exporting and importing lessons
+
+Lessons can be taken out as a `.zip` and brought in again, on the same platform or another one (from a
+laptop to the server, or to keep a copy):
+
+- **Export**: a lesson's ⋯ menu (in the list, or in the editor) has **Export as .zip**. On Teach > Lessons,
+  **Export** beside "Show" takes every lesson the list shows, in that order: choose a course there to export
+  that course's lessons.
+- **Import**: **Import** on Teach > Lessons (also offered while there are no lessons yet). Choose or drop the
+  `.zip` and who the lessons are for; they come in as **drafts**, after the lessons already there.
+
+The file holds each lesson's working copy (unpublished edits included), its pictures, and every notebook
+assignment it links to, as the teacher uploaded it: an autograded notebook **with its solutions and hidden
+tests**, and the answers to the knowledge checks. Keep it away from students. Nothing students did is in it
+(answers, progress, submissions, grades).
+
+On import, a linked notebook is taken in as if it were chosen on **Upload notebook**: it becomes a draft
+assignment for the same people as the lessons, and an autograded one goes through Otter again (the grading
+service must be running; it takes as long as running the notebook twice). When an assignment with the same
+title and the same file is already there, the lesson links to it instead of making a second one. Every
+picture and notebook is checked as an upload is. If anything in the file is refused, nothing is imported;
+a picture or notebook the file lacks only leaves its block empty, and the import says so.
+
+What is in the `.zip` (format version 1, `api/app/lesson_zip.py`):
+
+```
+lessons.json                          the lessons in order, and each notebook's title, description, points
+01-tls-basics/lesson.json             a lesson: title, summary, blocks
+01-tls-basics/images/1.png            its pictures
+notebooks/python-basics-lab-1/lab1.ipynb   the notebooks the lessons link to
+README.txt                            what the file is
+```
+
+The blocks are as stored, except that a picture or notebook is named by its file in the `.zip`
+(`"image"`, `"notebook"`) instead of an id. A file is at most 100 MB (and 200 lessons); Export refuses to
+make one that Import would not take back.
+
 ## Assignments
 
 Under **Teach > Assignments**, a teacher:
@@ -412,6 +450,15 @@ There are two kinds of assignment, decided by the notebook that was uploaded:
   hidden tests while the autograder runs it (see Current limits below).
 - **Graded by hand**: any other notebook. Submissions wait for the teacher.
 
+Until the first student opens an assignment, its **Settings** tab can still change its notebook, for
+instance to add Otter's cells to a notebook uploaded without them. **Edit in JupyterLab** puts a copy
+(for an autograded assignment, the version with solutions and tests) into the teacher's own notebook
+files, at `editing/<folder>/<notebook>`, and **Use my edits** takes it back from there; **Replace
+notebook** takes another file instead. Either goes through Otter as an upload does, so the assignment
+is autograded or graded by hand according to the new notebook. Once a student has opened it, it stays
+as it is: their copy is theirs, and it would no longer match the tests. A student who opens it while
+a new notebook is being saved gets the new one.
+
 The **Gradebook** tab of each assignment lists every student the assignment is given to, when they
 opened and submitted it, and their score. From there a teacher can open a submission in their own
 notebook environment (a copy; the student's files are not touched), download it, give or change the
@@ -419,8 +466,9 @@ score, write a comment for the student, run the autograder again, and download t
 **Save and next** saves a grade and opens the next submission waiting for one.
 
 Read an opened submission, do not run it: it is a student's code, and in the teacher's environment it
-would run with network access and with the teacher's files (other students' submissions among them) in
-reach. The autograder is the safe place where submissions are run.
+would run with network access and with the teacher's files in reach: other students' submissions, and
+the editing copies of autograded notebooks, hidden tests included. The autograder is the safe place
+where submissions are run.
 
 Student code never runs in the backend. The grading service (`grader/`) starts a new container of the
 student notebook image for every job, with no network, 2 GB of memory, one CPU, a limit on processes
@@ -484,8 +532,13 @@ python -m app.manage import-assignment ../assignments/otter-example/functions.ip
 
 Uploads are checked on the server: the file must be a real notebook (validated with `nbformat`) and its
 name is reduced to a plain file name. Requests are limited to 1 MB, except a teacher's notebook upload
-(11 MB) and a picture for a lesson (6 MB), which are only read after the account has been checked
-(`LimitRequestSize` in `api/app/main.py`).
+(11 MB), a picture for a lesson (6 MB) and a `.zip` of lessons to import (101 MB), which are only read
+after the account has been checked (`LimitRequestSize` in `api/app/main.py`).
+
+A lessons `.zip` is never unpacked to disk: only the files its `lessons.json` names are read, by plain
+names (no `..`, no leading `/`), each with its own limit (a picture 5 MB, a notebook 10 MB) and 300 MB
+in all, however large the file says they are, so a "zip bomb" is stopped early. Its pictures, notebooks
+and blocks go through the same checks as when they are uploaded or typed.
 
 Lessons: every block is checked on the server before it is saved (known types only, length limits, at
 most 200 blocks). A picture is accepted by how the file starts, never by its name, as PNG, JPEG, GIF or
@@ -512,7 +565,7 @@ student's home, or take a submission out of it, the backend has the hub make a t
 that one server for two minutes, and deletes it afterwards (`test/api/test_hub_client.py`).
 
 Current limits: an assignment is one notebook file (no extra data files) and its file cannot be replaced
-after upload. Every teacher manages every course and assignment. Only the newest submission of a student
+once a student has opened it. Every teacher manages every course and assignment. Only the newest submission of a student
 is kept. Otter runs the student's code and the tests in one process, so a student's code can read the
 hidden tests there and influence its own autograder score within the assignment's questions (the
 platform counts only those questions, none for more than the points read from the teacher's tests at
@@ -564,13 +617,18 @@ status, one line about it, its actions): one filled button for its main action, 
 and rare or destructive ones in a ⋯ menu.
 
 **Themes.** Everyone chooses how the site looks under **My account > Appearance**: **Standard** (the
-look above, light or dark as the device is set), **Halloween** (midnight purple and pumpkin orange,
-with bats and a cobweb) or **Retro 95** (grey windows with bevelled edges on a teal desktop). The
-choice belongs to the account (`users.theme`, saved with `PUT /api/auth/theme`, which only takes the
-names in `THEMES` in `api/app/models.py`), so it follows the person to every device. The browser also
-keeps it in a cookie, only so that a page is drawn in it from the first moment. A theme gives the
-colour roles of `globals.css` other values and redraws a few pieces its own way, all in
-`frontend/app/styles/themes.css`; the choices are listed in `frontend/lib/themes.ts`.
+look above), **Halloween** (pumpkin orange and purple, with bats and a cobweb) or **Retro 95** (grey
+windows with bevelled edges on a teal desktop), and, for any of them, **Light or dark**: Match my
+device (the default), Light or Dark. Each theme has both versions: Halloween on bone white or on
+midnight, Retro 95 in grey or in the dark grey of a high-contrast setting on a deep teal desktop. Both
+choices belong to the account (`users.theme` and `users.color_mode`, saved with `PUT /api/auth/theme`,
+which only takes the names in `THEMES` and `MODES` in `api/app/models.py`), so they follow the person
+to every device. The browser also keeps them in cookies, only so that a page is drawn in them from the
+first moment. A theme gives the colour roles of `globals.css` other values and redraws a few pieces
+its own way, all in `frontend/app/styles/themes.css`; the choices are listed in `frontend/lib/themes.ts`.
+Light or dark is `<html data-mode>`; without it the CSS asks the device. Each dark version is written
+twice (for a dark device, and for an account that chose dark), and `test/test_themes_css.py` checks
+that the two stay the same, that every version sets every colour, and the contrast of all six.
 
 ## Tests
 

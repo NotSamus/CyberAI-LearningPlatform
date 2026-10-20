@@ -1,12 +1,12 @@
 "use client";
-import { ArrowDown, ArrowUp, BookOpen, ChartColumn, CircleAlert, CircleHelp, Eye, LayoutList, Trash2, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, ChartColumn, CircleAlert, CircleHelp, Download, Eye, LayoutList, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import Menu from "@/components/Menu";
 import { Label, publishLabel } from "@/components/Status";
 import { lessonFor, lessonForNobody, plural } from "@/components/teach/given";
-import { api, type Course } from "@/lib/api";
+import { api, download, type Course } from "@/lib/api";
 import { JSON_HEADERS, message } from "@/lib/errors";
-import type { ManagedLesson } from "@/lib/lessons";
+import { lessonsZip, type ManagedLesson } from "@/lib/lessons";
 
 // Lessons as rows of one list: on Teach > Lessons, and on a course's page. `lessons` are the ones
 // shown, in the order students get them; `order` is every lesson's id in that order, which is what
@@ -38,6 +38,12 @@ export default function LessonRows({ lessons, order, courses, reorder, withinCou
     const here = ids.indexOf(lessons[index].id), there = ids.indexOf(lessons[index + by].id);
     [ids[here], ids[there]] = [ids[there], ids[here]];
     act(() => api("/teach/lessons/order", { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ ids }) }));
+  }
+
+  // The lesson as a .zip with its pictures and notebooks, to import here or on another platform.
+  function exportOne(lesson: ManagedLesson) {
+    onError("");
+    download(lessonsZip([lesson.id])).catch((e) => onError(message(e)));
   }
 
   function remove(lesson: ManagedLesson) {
@@ -86,6 +92,7 @@ export default function LessonRows({ lessons, order, courses, reorder, withinCou
                 items={[
                   { label: "Progress", icon: ChartColumn, href: `/teach/lessons/${lesson.id}/progress` },
                   { label: "Open as a student would", icon: Eye, href: `/lessons/${lesson.id}` },
+                  { label: "Export as .zip", icon: Download, onSelect: () => exportOne(lesson) },
                   { label: "Delete", icon: Trash2, danger: true, onSelect: () => remove(lesson) },
                 ]}
               />

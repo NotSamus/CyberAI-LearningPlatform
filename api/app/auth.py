@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app.db import get_db
-from app.models import ROLES, THEMES, LoginSession, User
+from app.models import MODES, ROLES, THEMES, LoginSession, User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -263,19 +263,27 @@ def change_password(body: PasswordChange, request: Request, response: Response, 
 
 
 class ThemeChoice(BaseModel):
-    theme: str
+    """Either or both: what is sent is changed."""
+    theme: str | None = None
+    mode: str | None = None
 
 
 @router.put("/theme")
 def choose_theme(body: ThemeChoice, request: Request, db: Session = Depends(get_db)):
     """A logged-in person chooses how the site looks for their own account (My account >
-    Appearance). Only the names in THEMES are taken."""
+    Appearance): the theme, and its light or dark version. Only the names in THEMES and MODES are
+    taken."""
     token = request.cookies.get(COOKIE_NAME)
     user = user_for_session(db, token) if token else None
     if user is None:
         raise HTTPException(401, "not logged in")
-    if body.theme not in THEMES:
+    if body.theme is None and body.mode is None:
+        raise HTTPException(422, "Send a theme, a mode, or both.")
+    if body.theme is not None and body.theme not in THEMES:
         raise HTTPException(400, "There is no such theme.")
-    user.theme = body.theme
+    if body.mode is not None and body.mode not in MODES:
+        raise HTTPException(400, "Choose light, dark, or as the device is set.")
+    user.theme = body.theme or user.theme
+    user.color_mode = body.mode or user.color_mode
     db.commit()
-    return {"theme": user.theme}
+    return {"theme": user.theme, "mode": user.color_mode}

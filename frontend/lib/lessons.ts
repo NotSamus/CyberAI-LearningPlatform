@@ -95,6 +95,18 @@ export type LessonProgress = {
 export const MAX_OPTIONS = 8;
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;     // same as MAX_IMAGE_BYTES in api/app/lessons.py
 
+// Lessons as a .zip, with their pictures and linked notebooks, to import here or on another
+// platform (api/app/lesson_zip.py). The path of the file of these lessons, in this order:
+export const lessonsZip = (ids: number[]) => `/teach/lessons.zip?ids=${ids.join(",")}`;
+export const MAX_IMPORT_BYTES = 100 * 1024 * 1024;  // same as MAX_FILE_BYTES in api/app/lesson_zip.py
+export const MAX_EXPORT_LESSONS = 200;              // same as MAX_LESSONS there
+export type LessonImport = {
+  lessons: { id: number; title: string }[];         // made, as drafts
+  notebooks_added: string[];                        // titles of the draft assignments made for the linked notebooks
+  notebooks_linked: string[];                       // were here already: the lessons link to those
+  warnings: string[];                               // pictures or notebooks the file left out
+};
+
 // Ids for blocks and options. Not crypto.randomUUID: that one is missing when the site is opened
 // over plain http at a network address (./dev.sh --lan).
 export function newId(): string {

@@ -9,10 +9,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
-from app import grading, submissions
-from app.main import app
+from app import assignments, grading, submissions
+from app.main import MAX_REQUEST_BYTES, app
 from app.models import Assignment, Submission
 from conftest import notebook_file, upload
 
@@ -415,6 +417,112 @@ def test_students_cannot_reach_submissions_or_grades(lab, hub, db):
     # Removing the assignment removes its submissions.
     teacher.delete("/api/teach/assignments/1")
     assert db.scalar(select(func.count()).select_from(Submission)) == 0
+
+
+# --- changing the notebook, until a student has it --------------------------------------------------
+
+def replace(client, content, name="functions.ipynb", assignment_id=1):
+    return client.put(f"/api/teach/assignments/{assignment_id}/notebook", files={"file": (name, content)})
+
+
+def test_grading_is_added_by_replacing_the_notebook(people, hub, otter, db):
+    teacher, maria, _ = people
+    upload(teacher, "Functions lab")
+    teacher.patch("/api/teach/assignments/1", json={"points": 10})
+
+    # Written for Otter now: Otter prepares it, and the points come from its tests.
+    changed = replace(teacher, otter_master()).json()
+    assert (changed["autograded"], changed["points"], changed["notebook_name"], changed["notebook_locked"]) == (True, 5.0, "functions.ipynb", False)
+    assert otter["prepared"] == ["functions.ipynb"]
+    stored = db.get(Assignment, 1)
+    db.refresh(stored)
+    assert (stored.notebook, stored.master, stored.question_points) == (student_version(), otter_master(), {"q1": 2.0, "q2": 3.0})
+
+    # Without Otter's cells it is graded by hand again, out of the default until the teacher sets it.
+    changed = replace(teacher, notebook_file("# graded by hand after all"), name="lab.ipynb").json()
+    assert (changed["autograded"], changed["points"], changed["notebook_name"]) == (False, None, "lab.ipynb")
+    assert teacher.get("/api/teach/assignments/1/master").status_code == 404
+    # Larger than most requests may be, like an upload.
+    assert replace(teacher, notebook_file("x" * (2 * MAX_REQUEST_BYTES))).status_code == 200
+
+    # A teacher trying it out does not stop it from being replaced; the first student does.
+    teacher.post("/api/assignments/1/launch")
+    assert replace(teacher, otter_master()).status_code == 200
+    teacher.patch("/api/teach/assignments/1", json={"for_everyone": True, "published": True})
+    maria.post("/api/assignments/1/launch")
+    assert hub[("s-2", "assignments/functions-lab-1/functions.ipynb")] == student_version()      # the latest one
+    assert teacher.get("/api/teach/assignments/1/progress").json()["assignment"]["notebook_locked"] is True
+    r = replace(teacher, notebook_file("a correction"))
+    assert r.status_code == 409 and "upload it as a new assignment" in r.json()["detail"]
+    for path in ["editing-copy", "editing-copy/use"]:
+        assert teacher.post(f"/api/teach/assignments/1/{path}", json={}).status_code == 409
+    assert db.scalar(select(Assignment.notebook).where(Assignment.id == 1)) == student_version()
+
+    # Teachers only.
+    assert replace(maria, notebook_file("mine")).status_code == 403
+    assert maria.post("/api/teach/assignments/1/editing-copy", json={}).status_code == 403
+    assert replace(teacher, notebook_file(), assignment_id=9).status_code == 404
+
+
+def test_the_notebook_is_edited_in_the_teachers_jupyterlab(people, hub, otter, db, monkeypatch):
+    teacher, _, _ = people
+    upload(teacher, "Functions lab", content=otter_master())
+    copy = ("t-1", "editing/functions-lab-1/lab.ipynb")
+
+    # The version with solutions and tests goes into the teacher's own home.
+    opened = teacher.post("/api/teach/assignments/1/editing-copy", json={}).json()
+    assert opened["url"] == "http://localhost:8081/user/t-1/cpu/lab/tree/editing/functions-lab-1/lab.ipynb"
+    assert hub[copy] == otter_master()
+
+    # Otter refuses an edit whose solutions fail its tests: nothing changes.
+    async def solutions_fail(master, name, gpu):
+        raise grading.GradingError("Otter stopped with an error.", "Test case failed")
+    monkeypatch.setattr(grading, "prepare", solutions_fail)
+    hub[copy] = otter_master().replace(b"x * x", b"x + x")
+    r = teacher.post("/api/teach/assignments/1/editing-copy/use")
+    assert r.status_code == 400 and "Otter could not prepare this notebook" in r.json()["detail"]
+    assert db.scalar(select(Assignment.master).where(Assignment.id == 1)) == otter_master()
+
+    # The edits as saved there take the place of the notebook.
+    edited = notebook_file("# no tests after all")
+    hub[copy] = edited
+    used = teacher.post("/api/teach/assignments/1/editing-copy/use").json()
+    assert (used["autograded"], used["points"]) == (False, None)
+    assert teacher.get("/api/teach/assignments/1/notebook").content == edited
+
+    # Opening it again keeps the edits in it, unless the teacher starts over.
+    hub[copy] = notebook_file("half done")
+    teacher.post("/api/teach/assignments/1/editing-copy", json={})
+    assert hub[copy] == notebook_file("half done")
+    teacher.post("/api/teach/assignments/1/editing-copy", json={"start_over": True})
+    assert hub[copy] == edited
+
+    monkeypatch.setattr("app.assignments.MAX_NOTEBOOK_BYTES", 1000)
+    hub[copy] = notebook_file("x" * 2000)
+    r = teacher.post("/api/teach/assignments/1/editing-copy/use")
+    assert r.status_code == 400 and "Clear its outputs" in r.json()["detail"]
+    del hub[copy]
+    r = teacher.post("/api/teach/assignments/1/editing-copy/use")
+    assert r.status_code == 404 and "Press Edit in JupyterLab" in r.json()["detail"]
+
+
+def test_a_student_cannot_open_it_while_its_notebook_is_being_replaced(people, db, monkeypatch):
+    teacher, _, _ = people
+    upload(teacher, "Essay")
+    engine, waited = db.get_bind(), []
+
+    def meanwhile(notebook):            # runs while replace_notebook holds the assignment
+        with Session(engine) as opening:
+            opening.execute(text("SET lock_timeout = '300ms'"))
+            try:
+                assignments.record_open(opening, 1, 2)
+            except OperationalError:
+                waited.append(True)
+
+    monkeypatch.setattr(assignments, "check_notebook", meanwhile)
+    with Session(engine) as replacing:
+        assignments.replace_notebook(replacing, 1, filename="new.ipynb", notebook=notebook_file("new"))
+    assert waited == [True] and not assignments.a_student_has_it(db, 1)
 
 
 # --- reading Otter's files ------------------------------------------------------------------------

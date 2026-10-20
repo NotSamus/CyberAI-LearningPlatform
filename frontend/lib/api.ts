@@ -64,6 +64,7 @@ export type ManagedAssignment = Assignment & {
   student_ids: number[];      // the students it is given to by name
   created_at: string;
   counts?: AssignmentCounts;  // in the list of assignments (GET /teach/assignments) only
+  notebook_locked?: boolean;  // a student has opened it, so its notebook can no longer be replaced (not in the list)
 };
 
 // One row of an assignment's gradebook.
@@ -94,6 +95,7 @@ export type Me = {
   gpu_enabled: boolean;
   gpu_notebooks: boolean;     // false while GPU notebooks are turned off for the whole platform (api/app/config.py)
   theme: string;              // how the site looks for this account (lib/themes.ts)
+  mode: string;               // in the theme's light or dark version, or as the device is set
 };
 
 export type Account = {
@@ -120,15 +122,37 @@ export async function endHubSession(): Promise<void> {
   await fetch(`${HUB_ORIGIN}/hub/logout`, { mode: "no-cors", credentials: "include" }).catch(() => {});
 }
 
+// Not logged in, or the session ended: log in, then come back to this page. Nothing more to show,
+// as the page is leaving: what it returns never settles.
+function logIn<T>(): Promise<T> {
+  const here = window.location.pathname + window.location.search;
+  window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+  return new Promise<T>(() => {});
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, { credentials: "same-origin", ...init });
-  if (res.status === 401 && window.location.pathname !== "/login") {
-    // Not logged in, or the session ended: log in, then come back to this page.
-    const here = window.location.pathname + window.location.search;
-    window.location.assign(`/login?next=${encodeURIComponent(here)}`);
-    return new Promise<T>(() => {});   // the page is leaving; nothing more to show
-  }
+  if (res.status === 401 && window.location.pathname !== "/login") return logIn<T>();
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.detail ?? `Request failed (${res.status})`);
   return body as T;
+}
+
+// Saves a file the server makes (lessons as a .zip) under the name it gives. Fetched rather than
+// followed as a link, so that a refusal (too large to import again, say) is shown on the page
+// instead of ending as a failed download.
+export async function download(path: string): Promise<void> {
+  const res = await fetch(`/api${path}`, { credentials: "same-origin" });
+  if (res.status === 401) return logIn<void>();
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `Request failed (${res.status})`);
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "download";
+  const url = URL.createObjectURL(await res.blob());
+  const link = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);     // once the browser has taken it
 }

@@ -7,15 +7,18 @@ route checks on the server that the account is a teacher or an admin; students g
 student asking for a lesson that is a draft, or was not given to them, gets the same 404 as for
 one that does not exist.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, undefer
 from starlette.datastructures import UploadFile
 
-from app import courses, lessons
+from app import assignments, courses, grading, lesson_zip, lessons
 from app.db import get_db
+from app.exports import file_stem
 from app.jupyter.deps import PlatformUser
 from app.jupyter.launch import require_user
 from app.models import Course, Lesson
@@ -180,6 +183,69 @@ async def upload_image(request: Request, teacher: PlatformUser = Depends(require
         return {"id": image.id, "url": f"/api/lessons/{lesson.id}/images/{image.id}"}
 
     return await run_in_threadpool(store)
+
+
+@teach_router.get("/lessons.zip")
+def export_lessons(
+    ids: str = Query(pattern=r"^\d{1,9}(,\d{1,9})*$", max_length=2000),
+    teacher: PlatformUser = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    """These lessons (`ids=3,1,2`, in that order) as a .zip, to import on this platform or another:
+    their working copies, pictures and linked notebooks (app/lesson_zip.py). It has the answers to
+    the knowledge checks and the solutions of autograded notebooks, so it is for teachers only."""
+    lesson_ids = list(dict.fromkeys(int(n) for n in ids.split(",")))
+    if len(lesson_ids) > lesson_zip.MAX_LESSONS:
+        raise HTTPException(400, f"Export at most {lesson_zip.MAX_LESSONS} lessons at a time.")
+    found = {lesson.id: lesson for lesson in db.scalars(select(Lesson).where(Lesson.id.in_(lesson_ids)).options(undefer(Lesson.blocks)))}
+    if len(found) < len(lesson_ids):
+        raise HTTPException(404, "No such lesson.")
+    chosen = [found[n] for n in lesson_ids]
+    try:
+        content = lesson_zip.export(db, chosen)
+    except lessons.LessonError as e:
+        raise HTTPException(400, str(e))
+    name = file_stem(chosen[0].title, "lesson") if len(chosen) == 1 else f"{len(chosen)}-lessons"
+    return Response(content, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{name}-{date.today().isoformat()}.zip"',
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",        # it holds answers and solutions
+    })
+
+
+@teach_router.post("/lesson-imports", status_code=201)
+async def import_lessons(request: Request, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Lessons from a .zip that Export made, here or on another platform (app/lesson_zip.py), as
+    drafts. A web form with `file`, and `for`: "none" (the default), "everyone" or a course's id,
+    which the lessons and their new assignments are given to. The form is read here and not declared
+    as parameters, so that the account check above comes first (as for pictures, above).
+
+    Autograded notebooks go through Otter, as on Upload notebook: that takes as long as running each
+    of them twice, and needs the grading service."""
+    async with request.form() as form:
+        file = form.get("file")
+        audience = str(form.get("for") or "none")
+        if not isinstance(file, UploadFile) or not (audience in ("none", "everyone") or (audience.isdigit() and len(audience) <= 9)):
+            raise HTTPException(422, 'Send a .zip file, and "for": none, everyone or a course\'s id.')
+        data = await file.read(lesson_zip.MAX_FILE_BYTES + 1)      # one byte more: enough to see it is too big
+    if len(data) > lesson_zip.MAX_FILE_BYTES:
+        raise HTTPException(400, f"The file is larger than {lesson_zip.MAX_FILE_BYTES // (1024 * 1024)} MB. Export fewer lessons at a time.")
+    course_id = int(audience) if audience.isdigit() else None
+
+    try:
+        if course_id is not None and await run_in_threadpool(db.get, Course, course_id) is None:
+            raise lessons.LessonError("That course does not exist.")
+        found = await run_in_threadpool(lesson_zip.read, db, data)
+        for notebook in found.notebooks.values():
+            if notebook.existing is None:
+                notebook.otter = await grading.autograded_fields(notebook.data, notebook.name, notebook.requires_gpu)
+        return await run_in_threadpool(lesson_zip.store, db, found, teacher.id, audience == "everyone", course_id)
+    except (lessons.LessonError, assignments.AssignmentError) as e:
+        raise HTTPException(400, str(e))
+    except grading.GraderUnreachable:
+        raise HTTPException(503, "The grading service is not reachable right now, and this file has autograded notebooks. Nothing was imported. Try again in a minute.")
+    except grading.GradingError as e:
+        raise HTTPException(400, f"Otter could not prepare a notebook in this file, so nothing was imported. {e}")
 
 
 # --- for everyone who is logged in ----------------------------------------------------------------

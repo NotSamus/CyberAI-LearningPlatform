@@ -79,6 +79,17 @@ async def _ask_grader(path: str, name: str, gpu: bool, files: dict[str, bytes]) 
     raise GradingError(str(detail) if r.status_code == 400 and detail else f"The grading service returned an error ({r.status_code}).")
 
 
+async def autograded_fields(notebook: bytes, name: str, gpu: bool) -> dict:
+    """What an uploaded notebook adds to its assignment (app.assignments.create) when it is written
+    in Otter Assign format: the version for students, the autograder package and each question's
+    points. Nothing for any other notebook, which is graded by hand."""
+    if not is_otter_master(notebook):
+        return {}
+    student, autograder = await prepare(notebook, name, gpu)
+    points = await question_points(student, autograder, name, gpu)
+    return {"notebook": student, "master": notebook, "autograder": autograder, "question_points": points, "points": sum(points.values())}
+
+
 async def prepare(master: bytes, name: str, gpu: bool) -> tuple[bytes, bytes]:
     """(the notebook for students, the autograder package). Otter runs the notebook's own solutions
     against its tests while preparing, and refuses a notebook whose solutions do not pass."""

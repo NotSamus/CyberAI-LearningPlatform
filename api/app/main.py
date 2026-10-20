@@ -1,4 +1,5 @@
 import asyncio
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -6,17 +7,20 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
-from app import admin, assignments, auth, config, exports, lesson_routes, lessons, submissions, teach
+from app import admin, assignments, auth, config, exports, lesson_routes, lesson_zip, lessons, submissions, teach
 from app.jupyter import launch, oauth
 
 # How large a request may be. Nearly everything sent here is a few lines of JSON; the exceptions
-# are a teacher uploading a notebook, or a picture for a lesson. Anything bigger is cut off while it
-# arrives, logged in or not, so nobody can fill the server's memory or disk with one request.
+# are a teacher uploading a notebook, a picture for a lesson, or lessons exported as a .zip.
+# Anything bigger is cut off while it arrives, logged in or not, so nobody can fill the server's
+# memory or disk with one request.
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = assignments.MAX_NOTEBOOK_BYTES + 1024 * 1024
 LARGER_REQUESTS = {
     ("POST", "/api/teach/assignments"): MAX_UPLOAD_REQUEST_BYTES,
+    ("PUT", "/api/teach/assignments/{id}/notebook"): MAX_UPLOAD_REQUEST_BYTES,
     ("POST", "/api/teach/lesson-images"): lessons.MAX_IMAGE_BYTES + 1024 * 1024,
+    ("POST", "/api/teach/lesson-imports"): lesson_zip.MAX_FILE_BYTES + 1024 * 1024,
 }
 
 @asynccontextmanager
@@ -63,9 +67,9 @@ async def refuse_cross_site_writes(request: Request, call_next):
 
 
 class LimitRequestSize:
-    """Refuses requests larger than `max_bytes` (or the larger limit given for that method and path):
-    at once when the Content-Length header says so, and otherwise while the body arrives (a sender
-    can leave that header out). The app is then told the sender went away, so it stops reading, and
+    """Refuses requests larger than `max_bytes` (or the larger limit given for that method and path,
+    where {id} stands for any number): at once when the Content-Length header says so, and otherwise
+    while the body arrives (a sender can leave that header out). The app is then told the sender went away, so it stops reading, and
     whatever it answers after that is dropped."""
 
     def __init__(self, app, max_bytes: int, larger: dict[tuple[str, str], int] | None = None):
@@ -74,7 +78,8 @@ class LimitRequestSize:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
-        max_bytes = self.larger.get((scope["method"], scope["path"].rstrip("/")), self.max_bytes)
+        path = re.sub(r"/\d+(?=/|$)", "/{id}", scope["path"].rstrip("/"))
+        max_bytes = self.larger.get((scope["method"], path), self.max_bytes)
         megabytes = max_bytes // (1024 * 1024)
         too_large = JSONResponse({"detail": f"This request is larger than {megabytes} MB."}, status_code=413)
         declared = dict(scope["headers"]).get(b"content-length", b"0")

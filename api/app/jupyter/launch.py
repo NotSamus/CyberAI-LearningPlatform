@@ -34,7 +34,7 @@ def visible_assignment(
     return assignment
 
 
-def _server_for(assignment: Assignment) -> str:
+def server_for(assignment: Assignment) -> str:
     # While GPU notebooks are off, a GPU assignment opens in the standard environment. Both servers
     # share one home directory, so the student's file is the same one when GPUs are back.
     return "gpu" if assignment.requires_gpu and config.GPU_NOTEBOOKS else "cpu"
@@ -52,6 +52,7 @@ async def me(user: PlatformUser = Depends(require_user)):
         "gpu_enabled": "gpu" in user.hub_groups,
         "gpu_notebooks": config.GPU_NOTEBOOKS,     # GPU notebooks are on for the platform (config.py)
         "theme": user.theme,
+        "mode": user.mode,
     }
 
 
@@ -139,15 +140,20 @@ async def launch(
     user: PlatformUser = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    server, path = _server_for(assignment), _path(assignment)
+    server = server_for(assignment)
     with hub_errors():
         await running_server(user, server)
+        # Recorded before the notebook is read: once a student has opened it, it can no longer be
+        # replaced, and a replacing under way finishes first (assignments.replace_notebook). Its
+        # file name is read again after that, as a replacing can change it.
+        await run_in_threadpool(assignments.record_open, db, assignment.id, user.id)
+        await run_in_threadpool(db.refresh, assignment)
+        path = _path(assignment)
         # The student's own copy, made the first time they open the assignment. Never overwritten:
         # from then on the file in their home is their work.
         if not await hub_client.has_file(user.hub_username, server, path):
             notebook = await run_in_threadpool(assignments.notebook_bytes, db, assignment.id)
             await hub_client.put_file(user.hub_username, server, path, notebook)
-    await run_in_threadpool(assignments.record_open, db, assignment.id, user.id)
     return {"ready": True, "profile": server, "url": notebook_url(user, server, path)}
 
 
@@ -163,7 +169,7 @@ async def submit(
     the status goes from "queued" to "graded" (GET /api/assignments/{id} shows it)."""
     if not assignment.published:
         raise HTTPException(400, "This assignment is a draft. Publish it before submitting to it.")
-    server = _server_for(assignment)
+    server = server_for(assignment)
     megabytes = assignments.MAX_SUBMISSION_BYTES // (1024 * 1024)
     too_large = f"Your notebook is larger than {megabytes} MB. Clear its outputs (Edit > Clear Outputs of All Cells), save it, and submit again."
     with hub_errors():
@@ -188,7 +194,7 @@ async def submit(
 @router.post("/assignments/{assignment_id}/stop")
 async def stop(assignment: Assignment = Depends(visible_assignment), user: PlatformUser = Depends(require_user)):
     try:
-        await hub_client.stop_server(user.hub_username, _server_for(assignment))
+        await hub_client.stop_server(user.hub_username, server_for(assignment))
     except httpx.HTTPError:
         raise HTTPException(503, "The notebook service is not reachable right now.")
     return {"stopped": True}

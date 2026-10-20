@@ -16,9 +16,11 @@ const nextConfig: NextConfig = {
   experimental: {
     // Local development only: `next dev` forwards /api to the backend (rewrites below) and takes in
     // at most this much of a request. The default, 10 MB, is exactly the notebook limit, so an
-    // upload of that size plus its form fields would stall. In production Caddy sends /api
-    // straight to the backend and this does not apply.
-    middlewareClientMaxBodySize: "12mb",
+    // upload of that size plus its form fields would stall; the largest upload is now a .zip of
+    // lessons, up to 100 MB (MAX_FILE_BYTES in api/app/lesson_zip.py). The backend still holds
+    // every request to its own limit (api/app/main.py). In production Caddy sends /api straight to
+    // the backend and this does not apply.
+    middlewareClientMaxBodySize: "101mb",
   },
   async headers() {
     return [

@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import Brand from "@/components/Brand";
 import Menu from "@/components/Menu";
 import { api, endHubSession } from "@/lib/api";
-import { applyTheme, isTheme, shownTheme } from "@/lib/themes";
+import { applyMode, applyTheme, isMode, isTheme, shownMode, shownTheme } from "@/lib/themes";
 import { useMe } from "@/lib/useMe";
 
 // The first letters of the first and the last word of a name. Words that do not start with a
@@ -23,9 +23,10 @@ export default function TopBar() {
   const me = useMe();
   const path = usePathname();
 
-  // The account's own theme, once it is known: this browser may have shown another one last time.
+  // The account's own theme and light or dark, once known: this browser may have shown others last time.
   useEffect(() => {
     if (me && isTheme(me.theme) && me.theme !== shownTheme()) applyTheme(me.theme);
+    if (me && isMode(me.mode) && me.mode !== shownMode()) applyMode(me.mode);
   }, [me]);
 
   async function logout() {

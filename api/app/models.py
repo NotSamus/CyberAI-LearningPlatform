@@ -11,6 +11,7 @@ ROLES = ("student", "teacher")
 # How the site looks for an account, chosen under My account. The browser only shows it; a name
 # outside this list is refused by the server (app/auth.py).
 THEMES = ("standard", "halloween", "retro")
+MODES = ("device", "light", "dark")         # light or dark: as the device is set, or always one
 
 
 class User(Base):
@@ -25,6 +26,7 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(default=False)               # may manage accounts
     gpu_enabled: Mapped[bool] = mapped_column(default=False)
     theme: Mapped[str] = mapped_column(String(16), default="standard", server_default="standard")   # one of THEMES
+    color_mode: Mapped[str] = mapped_column(String(8), default="device", server_default="device")   # one of MODES
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

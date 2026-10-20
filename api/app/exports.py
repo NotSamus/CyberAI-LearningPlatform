@@ -224,10 +224,10 @@ def to_xlsx(sheets: list[Table]) -> bytes:
     return out.getvalue()
 
 
-def _file_stem(name: str) -> str:
-    """A course's name as part of a file name: "Programación 1, sección 2" -> "programacion-1-seccion-2"."""
+def file_stem(name: str, fallback: str = "course") -> str:
+    """A name as part of a file name: "Programación 1, sección 2" -> "programacion-1-seccion-2"."""
     letters = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", letters.lower()).strip("-")[:40].strip("-") or "course"
+    return re.sub(r"[^a-z0-9]+", "-", letters.lower()).strip("-")[:40].strip("-") or fallback
 
 
 def _download(content: bytes, stem: str, kind: Kind) -> Response:
@@ -255,4 +255,4 @@ def export_course(course_id: int, kind: Kind, teacher: PlatformUser = Depends(re
     if course is None:
         raise HTTPException(404, "No such course.")
     sheet = table(load(db), course)
-    return _download(to_csv(sheet) if kind == "csv" else to_xlsx([sheet]), _file_stem(course.name), kind)
+    return _download(to_csv(sheet) if kind == "csv" else to_xlsx([sheet]), file_stem(course.name), kind)

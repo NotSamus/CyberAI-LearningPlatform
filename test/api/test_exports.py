@@ -168,5 +168,5 @@ def test_sheet_names_follow_excels_rules():
     assert exports._sheet_name(long, used) == "A course with a very long n (2)"
     assert exports._sheet_name("History", used) == "History course"
     assert exports._sheet_name("'?*'", used) == "Course"
-    assert exports._file_stem("Programación 1, sección 2") == "programacion-1-seccion-2"
-    assert exports._file_stem("¿?") == "course"
+    assert exports.file_stem("Programación 1, sección 2") == "programacion-1-seccion-2"
+    assert exports.file_stem("¿?") == "course"

@@ -6,12 +6,13 @@ Students get 403 here whatever the frontend shows or hides.
 """
 import csv
 import io
+from contextlib import contextmanager
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -19,7 +20,7 @@ from app import assignments, courses, grading, submissions
 from app.db import get_db
 from app.jupyter import hub_client
 from app.jupyter.deps import PlatformUser, get_current_user_optional
-from app.jupyter.launch import hub_errors, notebook_url, running_server
+from app.jupyter.launch import hub_errors, notebook_url, running_server, server_for
 from app.models import Announcement, Assignment, Course, Submission, User
 
 router = APIRouter(prefix="/api/teach", tags=["teach"])
@@ -48,6 +49,7 @@ def _details(db: Session, assignment: Assignment) -> dict:
         "for_everyone": assignment.for_everyone,
         "student_ids": assignments.student_ids(db).get(assignment.id, []),
         "created_at": assignment.created_at.isoformat(),
+        "notebook_locked": assignments.a_student_has_it(db, assignment.id),     # its notebook can no longer be replaced
     }
 
 
@@ -125,25 +127,28 @@ async def create_assignment(request: Request, teacher: PlatformUser = Depends(re
             notebook=await file.read(assignments.MAX_NOTEBOOK_BYTES + 1),   # one byte more: enough to see it is too big
             created_by=teacher.id,
         )
-    try:
+    with _taking_in_a_notebook():
         name = assignments.safe_notebook_name(fields["filename"])
         assignments.check_title(fields["title"])
         assignments.check_notebook(fields["notebook"])
-        if grading.is_otter_master(fields["notebook"]):
-            master = fields["notebook"]
-            student, autograder = await grading.prepare(master, name, fields["requires_gpu"])
-            points = await grading.question_points(student, autograder, name, fields["requires_gpu"])
-            fields.update(
-                notebook=student, master=master, autograder=autograder, question_points=points, points=sum(points.values()),
-            )
+        fields.update(await grading.autograded_fields(fields["notebook"], name, fields["requires_gpu"]))
         assignment = await run_in_threadpool(lambda: assignments.create(db, **fields))
+    return _details(db, assignment)
+
+
+@contextmanager
+def _taking_in_a_notebook():
+    """Turns what can go wrong with an uploaded notebook, Otter's preparing included, into an answer."""
+    try:
+        yield
+    except assignments.NotebookLocked as e:
+        raise HTTPException(409, str(e))
     except assignments.AssignmentError as e:
         raise HTTPException(400, str(e))
     except grading.GraderUnreachable:
         raise HTTPException(503, "The grading service is not reachable right now, so this autograded notebook was not uploaded. Try again in a minute.")
     except grading.GradingError as e:
         raise HTTPException(400, f"Otter could not prepare this notebook. {e}")
-    return _details(db, assignment)
 
 
 class Changes(BaseModel):
@@ -217,6 +222,90 @@ def download_master(assignment_id: int, teacher: PlatformUser = Depends(require_
     if master is None:
         raise HTTPException(404, "This assignment has no separate version with solutions.")
     return _download(master, f"with-solutions-{assignment.notebook_name}")
+
+
+# --- changing the notebook, until a student has it --------------------------------------------------
+# A teacher adds grading to an uploaded notebook (Otter's cells), or corrects it, by uploading a new
+# version or by editing it in their own JupyterLab. Only until the first student opens the
+# assignment: from then on that student's copy is theirs, and it would no longer match the tests.
+
+def _changeable_or_409(db: Session, assignment_id: int) -> Assignment:
+    assignment = _assignment_or_404(db, assignment_id)
+    if assignments.a_student_has_it(db, assignment.id):
+        raise HTTPException(409, str(assignments.NotebookLocked()))
+    return assignment
+
+
+async def _replace(db: Session, assignment: Assignment, filename: str, notebook: bytes) -> dict:
+    """Takes the notebook in as an upload is taken in: Otter prepares one written in Otter Assign
+    format, which makes the assignment autograded; any other is graded by hand."""
+    with _taking_in_a_notebook():
+        name = assignments.safe_notebook_name(filename)
+        assignments.check_notebook(notebook)
+        fields = {"notebook": notebook, **await grading.autograded_fields(notebook, name, assignment.requires_gpu)}
+        replaced = await run_in_threadpool(lambda: assignments.replace_notebook(db, assignment.id, filename=name, **fields))
+    return _details(db, replaced)
+
+
+@router.put("/assignments/{assignment_id}/notebook")
+async def replace_assignment_notebook(
+    assignment_id: int, request: Request, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db),
+):
+    """Puts an uploaded notebook (a web form with the field `file`) in place of the assignment's own.
+    The form is read after the checks, as in create_assignment."""
+    assignment = await run_in_threadpool(_changeable_or_409, db, assignment_id)
+    async with request.form() as form:
+        file = form.get("file")
+        if not isinstance(file, UploadFile):
+            raise HTTPException(422, "Send a notebook file.")
+        filename, notebook = file.filename or "", await file.read(assignments.MAX_NOTEBOOK_BYTES + 1)
+    return await _replace(db, assignment, filename, notebook)
+
+
+def _editing_copy(assignment: Assignment) -> str:
+    """Where a teacher edits the assignment's notebook, in their own Jupyter home."""
+    return f"editing/{assignment.slug}/{assignment.notebook_name}"
+
+
+class EditingCopy(BaseModel):
+    start_over: bool = False        # replace a copy already there, and the edits in it, with the notebook as it is now
+
+
+@router.post("/assignments/{assignment_id}/editing-copy")
+async def open_editing_copy(
+    assignment_id: int, body: EditingCopy, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db),
+):
+    """Puts the assignment's notebook into the teacher's own Jupyter home to edit there, and says
+    where to open it: for an autograded assignment, the version with solutions and tests. A copy
+    already there is opened as it is, edits and all, unless `start_over`."""
+    assignment = await run_in_threadpool(_changeable_or_409, db, assignment_id)
+    server, path = server_for(assignment), _editing_copy(assignment)
+    with hub_errors():
+        await running_server(teacher, server)
+        if body.start_over or not await hub_client.has_file(teacher.hub_username, server, path):
+            notebook = await run_in_threadpool(
+                lambda: db.scalar(select(func.coalesce(Assignment.master, Assignment.notebook)).where(Assignment.id == assignment.id))
+            )
+            await hub_client.put_file(teacher.hub_username, server, path, notebook)
+    return {"ready": True, "profile": server, "url": notebook_url(teacher, server, path)}
+
+
+@router.post("/assignments/{assignment_id}/editing-copy/use")
+async def use_editing_copy(assignment_id: int, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Takes the teacher's editing copy, as it is saved in their Jupyter home now, in place of the
+    assignment's notebook, as an upload would be (PUT .../notebook)."""
+    assignment = await run_in_threadpool(_changeable_or_409, db, assignment_id)
+    server, path = server_for(assignment), _editing_copy(assignment)
+    with hub_errors():
+        await running_server(teacher, server)
+        try:
+            notebook = await hub_client.get_file(teacher.hub_username, server, path, assignments.MAX_NOTEBOOK_BYTES)
+        except hub_client.FileTooLarge:
+            megabytes = assignments.MAX_NOTEBOOK_BYTES // (1024 * 1024)
+            raise HTTPException(400, f"The notebook is larger than {megabytes} MB. Clear its outputs, save it, and try again.")
+    if notebook is None:
+        raise HTTPException(404, f"There is no editing copy in your notebook files ({path}). Press Edit in JupyterLab to make one.")
+    return await _replace(db, assignment, assignment.notebook_name, notebook)
 
 
 # --- progress and grades --------------------------------------------------------------------------

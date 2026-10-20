@@ -21,6 +21,7 @@ class PlatformUser:
     is_admin: bool = False                 # may manage accounts on the platform
     gpu_enabled: bool = False              # set by a teacher / by enrolment in a GPU course
     theme: str = "standard"                # how the site looks for them (app.models.THEMES)
+    mode: str = "device"                   # in its light or dark version (app.models.MODES)
     extra_groups: list[str] = field(default_factory=list)
 
     @classmethod
@@ -33,6 +34,7 @@ class PlatformUser:
             is_admin=user.is_admin,
             gpu_enabled=user.gpu_enabled,
             theme=user.theme,
+            mode=user.color_mode,
         )
 
     @property

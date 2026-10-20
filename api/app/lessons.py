@@ -138,6 +138,16 @@ def video_id(url: str) -> str | None:
 def check_blocks(db: Session, lesson: Lesson, raw: object) -> list[dict]:
     """A working copy as the editor sent it, in the shape it is stored in. It may be unfinished (a
     question with no correct option yet): `problems` decides whether it can be published."""
+    blocks = check_shape(raw)
+    pictures = {block["image_id"] for block in blocks if block["type"] == "image" and block["image_id"] is not None}
+    if pictures - set(db.scalars(select(LessonImage.id).where(LessonImage.lesson_id == lesson.id))):
+        raise LessonError("A picture in this lesson was not uploaded to it. Add the picture again.")
+    return blocks
+
+
+def check_shape(raw: object) -> list[dict]:
+    """`check_blocks` without the check that its pictures belong to the lesson: for blocks whose
+    pictures are not stored yet (a lesson being imported, app/lesson_zip.py)."""
     if not isinstance(raw, list) or len(raw) > MAX_BLOCKS:
         raise LessonError(f"A lesson has at most {MAX_BLOCKS} blocks.")
     try:
@@ -156,9 +166,6 @@ def check_blocks(db: Session, lesson: Lesson, raw: object) -> list[dict]:
         raise LessonError("Two blocks, or two options of a question, have the same id.")
     if len(json.dumps(blocks)) > MAX_LESSON_BYTES:
         raise LessonError("This lesson is too long to save. Split it into two lessons.")
-    pictures = {block["image_id"] for block in blocks if block["type"] == "image" and block["image_id"] is not None}
-    if pictures - set(db.scalars(select(LessonImage.id).where(LessonImage.lesson_id == lesson.id))):
-        raise LessonError("A picture in this lesson was not uploaded to it. Add the picture again.")
     return blocks
 
 

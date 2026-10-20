@@ -156,6 +156,7 @@ psql postgresql://platform:dev-db-password@localhost:5433/platform
 - Every teacher manages every course and assignment.
 - Only a student's newest submission is kept.
 - An assignment is one notebook, no data files, and its file cannot be replaced after upload.
+  (Since 2026-10-19: it can, until the first student opens it. See that day's section.)
 - GPU assignments are graded without a GPU.
 
 ### Not verified yet
@@ -573,3 +574,122 @@ session; 3 (one address for every notebook server) needs a wildcard DNS name and
   the GPU server when on), ruff, tsc, ESLint. In the dev browser (made-up data, light, one width): the
   note beside "Needs a GPU" on Upload notebook and beside "GPU notebooks" in Add account.
 - Not looked at: the assignment Settings tab, Edit account, and what students see (Home, assignment page).
+
+## Exporting and importing lessons as a .zip (2026-10-19)
+- A lesson's ⋯ menu (list and editor): **Export as .zip**. Teach > Lessons: **Export** beside "Show" takes
+  the lessons the list shows, in that order (choose a course to get its lessons). **Import** beside New
+  lesson, and in the empty list, so a new server starts from it. Asked for so lessons can be moved (laptop
+  to the UTEP server) or kept and brought back.
+- In the file: `lessons.json` (order, format version 1), a folder per lesson (`lesson.json` + `images/`),
+  `notebooks/<slug>/<file>.ipynb` for each linked assignment, `README.txt`. Blocks name their picture or
+  notebook by its path in the .zip, never by an id. Layout is in `api/app/lesson_zip.py` and README.md.
+- Decided while building (not asked):
+  - The **working copy** is exported (what the editor shows, unpublished edits included), not the
+    published version. Imported lessons are **drafts**, after the others, for whom the Import dialog says
+    (nobody by default). Nothing students did goes in the file.
+  - Linked notebooks travel with the lessons, as the teacher uploaded them: an autograded one **with its
+    solutions and hidden tests**. The file is for teachers; the hint on Export and the README.txt say so.
+  - On import a notebook is taken in like Upload notebook (Otter prepares an autograded one again; the
+    grader must be up, otherwise 503 and nothing imported). If an assignment with the **same title and the
+    same file** is already there, the lesson links to it instead of making a copy. New assignments are
+    drafts for the same people as the lessons: they must be published for the links to show to students.
+  - All or nothing: everything is read and checked first, then stored in one transaction. A picture or
+    notebook missing from the file only empties its block, with a warning in the result.
+  - At most 100 MB and 200 lessons per file; Export refuses a file that Import would not take back.
+    The dev proxy limit in `frontend/next.config.ts` went from 12 MB to 101 MB for it (dev only).
+- Routes: `GET /api/teach/lessons.zip?ids=3,1,2` and `POST /api/teach/lesson-imports` (form: `file`,
+  `for` = none / everyone / course id), teachers only. Shared on the way: `grading.autograded_fields`
+  (Upload notebook uses it too), `lessons.check_shape`, `exports.file_stem`, `assignments.create(commit=False)`.
+- No database change, no new setting. On the server: `git pull`, `docker compose up -d --build`. A proxy
+  UTEP puts in front must let 101 MB requests through to the import (deploy/README.md).
+
+### Checked
+- 18 new tests (`test/api/test_lesson_zip.py`): the round trip on the same platform (picture bytes, blocks,
+  linked to the same assignment, no student answers in the file), "another platform" with a plain and an
+  autograded notebook given to a course, grader down, who may use it, missing files, 12 kinds of refused
+  file leaving no rows, size limits. Breaking the request-size entry or the assignment match makes them
+  fail. All 151 backend tests, ruff, tsc and ESLint pass.
+- In the dev browser against a real backend on a throwaway Postgres (port 5436, deleted afterwards),
+  logged in as a test teacher: the export through the site (fetched in the page), importing it on the same
+  platform for a course (linked to the existing notebook) and into an emptied platform (new draft
+  assignment), the picture shown in the imported lesson, a refused export ("No such lesson." on the page)
+  and a file that is not a .zip. Teach > Lessons and the dialog at 768, 1024 and 1440 px, light.
+
+### Not verified
+- Clicking Export so that the browser saves the file (it would have written to Downloads): only the
+  request behind it was tried. Choosing the .zip with the file picker (it was dropped).
+- An autograded notebook through the real grader (the tests fake Otter), and a large file (only ~110 KB
+  and the tests' 1.5 MB picture were tried). Dark theme, Halloween and Retro 95.
+- Importing a file into the main checkout's dev database: on purpose, nothing here touched it.
+
+## Changing an assignment's notebook after upload (2026-10-19)
+- Asked how to add the grading (Otter's cells) to a notebook already uploaded. The assignment's
+  Settings tab now has "Change the notebook": Edit in JupyterLab (a copy at `editing/<slug>/<name>` in
+  my own notebook files; for an autograded one the version with solutions) then Use my edits, or upload
+  a new version. Otter runs as at upload: with Otter's cells it becomes autograded, without them graded
+  by hand (out of 100 again unless I set the points).
+- Decision: only until the first student opens it or hands one in; teachers trying it out do not count.
+  After that, a corrected notebook is a new assignment, as before: the student's copy has the old
+  public tests.
+- Pressing Edit in JupyterLab again opens my copy with my edits in it; Start over replaces them.
+- A student opening it while a new notebook is being saved waits for that (the save locks the
+  assignment's row; opening records the open before copying the notebook), so nobody gets the old file
+  after a replace. Tested by holding the lock with a timeout.
+- My own try-out copy under `assignments/<slug>/` is not updated by a replace: delete it in JupyterLab.
+- The editing copy (hidden tests included) sits in my notebook files next to opened submissions:
+  one more reason never to run an opened submission there.
+- The platform runs Otter Assign itself (grader service, `otter assign`), at upload and at a replace:
+  the teacher never makes the autograder .zip; it is kept in the database.
+- Verified: pytest, ruff, tsc, ESLint. End to end on the dev site with the real hub and grader, with
+  throwaway accounts check-teacher / check-student: plain notebook replaced by the Otter example in
+  12 s (5 points), editing copy out and back unchanged, the student's open, 409 after it, the student's
+  submission autograded (0 of 5). The Settings tab at 768 / 1024 / 1440 px light, and 768 dark; the
+  locked tab at 768.
+- Not verified: the three buttons clicked in the page (the same requests were made from a script), and
+  choosing a file in the drop area.
+
+## Light and dark for every theme (2026-10-19)
+- Asked for light and dark mode for the three themes. Before: Standard followed the device, Halloween
+  was always dark, Retro 95 always light.
+- Decision (chosen from two options): every theme follows the device by default, and My account >
+  Appearance has "Light or dark": Match my device / Light / Dark, saved with the account like the theme
+  (`users.color_mode`, migration `2026_10_19_1800-8d4a2f6c1b90_account_color_mode.py`, same
+  `PUT /api/auth/theme` with `mode`). A `cyberai_mode` cookie draws the first paint, as for the theme.
+- New versions: Halloween light (bone white page, purple ink, burnt-orange accent, the bar stays
+  midnight, code stays a midnight block, the cobweb drawn in purple); Retro 95 dark (dark grey windows
+  and bevels, black fields and lists, light-blue accents, deep teal desktop, a black editor). Retro's
+  hard-coded whites and blacks became colours (`--field`, `--focus-line`, `--frame`, ...).
+- Retro 95 light's green on grey was 3.95:1; now 4.87:1 (`--gpu` 17% instead of 20%).
+- The dark colours are written twice (device dark, and chosen dark): no `light-dark()`, which needs
+  iPadOS 17.5+. `test/test_themes_css.py` keeps the copies the same, checks every version sets every
+  colour, and the contrast in all six versions.
+- On the server: `git pull`, `docker compose up -d --build`, run the migrations (new column).
+- Verified: pytest, ruff, tsc, ESLint. In the dev browser, with the theme set on the page only (my
+  admin account's saved choice untouched): every theme x choice x device setting gives the right
+  colours (18 cases read from the page); Home, a lesson with code, Teach > Assignments and the account
+  menu in Halloween light and Retro 95 dark at 1024; Halloween light at 768, Retro 95 dark at 1440; the
+  Appearance pictures following light and dark.
+- Not verified: pressing Light / Dark in Appearance (it would have saved to my account; the API is
+  tested); the login page in the new versions; Halloween's bats sit over "Admin" in the bar at 768,
+  as before in dark.
+
+## Ideas (not built)
+
+### A classroom address instead of the IP and port: `http://cyberai.local` (2026-10-19)
+- The name: the machine announces `cyberai.local` by itself, no DNS server needed (Mac: System
+  Settings > General > Sharing > Local hostname = `cyberai`; Ubuntu: hostname `cyberai` + `avahi-daemon`).
+  iPads, Macs and Windows find it. A bare `cyberai` needs a DNS entry on a router I control, and
+  students would still have to type `cyberai/`.
+- Works today, with the port: `DEV_HOST=cyberai.local ./dev.sh --lan`, students open
+  `http://cyberai.local:3000`. DEV_HOST in lowercase: browsers send it lowercase and the backend
+  compares the origin exactly (`api/app/main.py`), so `samusMP-2.local` would refuse every login.
+- Without the port, dev.sh: frontend on port 80, and dev.sh must write APP_ORIGIN without `:80`
+  (browsers leave the default port out of Origin). The hub can stay on 8081: students never type it.
+- Without the port, server stack: Caddy is already on 80/443. `APP_DOMAIN=http://cyberai.local` and
+  `APP_ORIGIN=http://cyberai.local`, plus a second announced name for the hub under it
+  (`hub.cyberai.local`), so site and hub stay same-site for the hub's cookie.
+- Limits: plain http, because no certificate can be issued for a `.local` name, so passwords cross
+  the room unencrypted: use a classroom router of my own, not campus Wi-Fi. Campus Wi-Fi often blocks
+  `.local` names between devices anyway.
+- Not verified: avahi announcing a two-part name like `hub.cyberai.local`; Caddy with `http://` inside
+  `APP_DOMAIN`.
