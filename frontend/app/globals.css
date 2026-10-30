@@ -17,17 +17,19 @@
   --radius: 8px; --radius-small: 4px; --pill: 9999px;
   /* How long a line of reading text may get: about 75 characters */
   --measure: 34em;
-  /* The bar at the top is navy; the cyan spark (logo, the bar's marks) is only ever used on navy */
+  /* UTEP's colours: the bar is UTEP Blue (#041E42), its quiet words UTEP Silver (#B1B3B3), and the
+     spark (logo, the bar's marks) UTEP Orange (#FF8200), which is only ever used on navy: on white
+     it is too light for text, so links and buttons use the darker orange of --accent. */
   --bar-h: 56px;
   --navy: hsl(215, 89%, 14%);
   --bar-text: hsl(214, 30%, 96%);
-  --bar-muted: hsl(214, 40%, 78%);
+  --bar-muted: hsl(180, 1%, 70%);
   --bar-hover: hsl(215, 70%, 24%);
   --bar-line: hsl(214, 35%, 50%);
   --bar-edge: transparent;
-  --spark: hsl(188, 90%, 52%);
+  --spark: hsl(31, 100%, 50%);
   --avatar: hsl(220, 60%, 32%);
-  --mark-from: hsl(226, 82%, 40%);      /* the logo's square, from its top left corner to its bottom right one */
+  --mark-from: hsl(215, 70%, 32%);      /* the logo's square, from its top left corner to its bottom right one */
   --mark-to: hsl(215, 89%, 14%);
   /* Type faces: the device's own, and one for code */
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -51,15 +53,15 @@
   --muted: hsl(217, 10%, 40%);          /* secondary text */
   --border: hsl(213, 16%, 89%);         /* lines that only divide */
   --border-strong: hsl(216, 12%, 52%);  /* outlines of fields, choices and outlined buttons */
-  --accent: hsl(226, 82%, 55%);         /* links, the main button, what is selected */
-  --accent-hover: hsl(226, 82%, 48%);
+  --accent: hsl(28, 100%, 35%);         /* links, the main button, what is selected */
+  --accent-hover: hsl(28, 100%, 29%);
   --accent-text: hsl(0, 0%, 100%);
-  --accent-tint: hsl(226, 90%, 96%);
+  --accent-tint: hsl(31, 100%, 94%);
   --gpu: hsl(156, 85%, 26%);            /* green: done, published, right, GPU */
   --good-tint: hsl(152, 55%, 92%);
   --error: hsl(3, 71%, 41%);            /* red: errors, late or overdue, out of tries, deleting */
   --bad-tint: hsl(3, 80%, 95%);
-  --info: hsl(224, 80%, 40%);           /* blue words for "in progress", on --accent-tint */
+  --info: hsl(215, 75%, 32%);           /* blue words for "in progress", on --accent-tint */
   --warn: hsl(44, 85%, 24%);            /* yellow: needs attention soon (due soon, changes not published, try again) */
   --warn-tint: hsl(50, 100%, 92%);
   --warn-line: hsl(48, 96%, 50%);       /* stripes only, never text */
@@ -81,8 +83,8 @@
     --muted: hsl(215, 12%, 65%);
     --border: hsl(217, 13%, 19%);
     --border-strong: hsl(216, 10%, 50%);
-    --accent: hsl(227, 100%, 71%);
-    --accent-hover: hsl(227, 100%, 77%);
+    --accent: hsl(31, 100%, 50%);
+    --accent-hover: hsl(31, 100%, 60%);
     --accent-text: hsl(223, 24%, 6%);
     --gpu: hsl(151, 50%, 53%);
     --error: hsl(3, 70%, 83%);
@@ -97,7 +99,6 @@
     --bar-hover: hsl(217, 35%, 22%);
     --bar-line: hsl(216, 20%, 45%);
     --bar-edge: hsl(217, 25%, 24%);
-    --spark: hsl(187, 80%, 60%);
   }
 }
 :root[data-mode="dark"] {
@@ -109,8 +110,8 @@
   --muted: hsl(215, 12%, 65%);
   --border: hsl(217, 13%, 19%);
   --border-strong: hsl(216, 10%, 50%);
-  --accent: hsl(227, 100%, 71%);
-  --accent-hover: hsl(227, 100%, 77%);
+  --accent: hsl(31, 100%, 50%);
+  --accent-hover: hsl(31, 100%, 60%);
   --accent-text: hsl(223, 24%, 6%);
   --gpu: hsl(151, 50%, 53%);
   --error: hsl(3, 70%, 83%);
@@ -125,7 +126,6 @@
   --bar-hover: hsl(217, 35%, 22%);
   --bar-line: hsl(216, 20%, 45%);
   --bar-edge: hsl(217, 25%, 24%);
-  --spark: hsl(187, 80%, 60%);
 }
 
 /* --- Basics ------------------------------------------------------------------------------------- */

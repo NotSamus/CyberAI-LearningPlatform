@@ -5,7 +5,7 @@
 // app/globals.css (Standard) and app/styles/themes.css.
 
 export const THEMES = [
-  { id: "standard", name: "Standard", description: "Navy and white, or navy and charcoal." },
+  { id: "standard", name: "Standard", description: "UTEP blue and orange, on white or on charcoal." },
   { id: "halloween", name: "Halloween", description: "Pumpkin orange and purple, on bone white or midnight, with a few bats." },
   { id: "retro", name: "Retro 95", description: "Grey windows on a teal desktop, like a computer from 1995." },
 ] as const;

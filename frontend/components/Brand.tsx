@@ -1,7 +1,7 @@
 import { useId } from "react";
 
-// The logo: a shield (security) with a spark in it (AI), on a square that runs from blue to navy,
-// and the name beside it. The spark is cyan, which is only ever used on navy. A theme can change
+// The logo: a shield (security) with a spark in it (AI), on a square in UTEP Blue,
+// and the name beside it. The spark is UTEP Orange, which is only ever used on navy. A theme can change
 // these colours (--mark-from, --mark-to, --spark: app/styles/themes.css).
 export default function Brand() {
   const fill = useId();
