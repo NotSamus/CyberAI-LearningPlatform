@@ -641,10 +641,15 @@ status, one line about it, its actions): one filled button for its main action, 
 and rare or destructive ones in a ⋯ menu.
 
 **Themes.** Everyone chooses how the site looks under **My account > Appearance**: **Standard** (the
-look above), **Halloween** (pumpkin orange and purple, with bats and a cobweb) or **Retro 95** (grey
-windows with bevelled edges on a teal desktop), and, for any of them, **Light or dark**: Match my
-device (the default), Light or Dark. Each theme has both versions: Halloween on bone white or on
-midnight, Retro 95 in grey or in the dark grey of a high-contrast setting on a deep teal desktop. Both
+look above), **Halloween** (pumpkin orange and purple, with bats and a cobweb), **Retro 95** (grey
+windows with bevelled edges on a teal desktop), **Christmas** (pine green and cranberry red, with a
+string of lights on the bar and snow falling behind the cards, standing still for anyone whose device
+asks for reduced motion), **Cozy** (oat, cocoa and terracotta, rounded letters and soft corners) or
+**Minimalist** (black and white, thin lines instead of shadows), and, for any of them, **Light or
+dark**: Match my device (the default), Light or Dark. Each theme has both versions: Halloween on bone
+white or on midnight, Retro 95 in grey or in the dark grey of a high-contrast setting on a deep teal
+desktop, Christmas on snow white or a winter night, Cozy on oat or fireplace brown, Minimalist white
+or black. Both
 choices belong to the account (`users.theme` and `users.color_mode`, saved with `PUT /api/auth/theme`,
 which only takes the names in `THEMES` and `MODES` in `api/app/models.py`), so they follow the person
 to every device. The browser also keeps them in cookies, only so that a page is drawn in them from the
@@ -652,7 +657,7 @@ first moment. A theme gives the colour roles of `globals.css` other values and r
 its own way, all in `frontend/app/styles/themes.css`; the choices are listed in `frontend/lib/themes.ts`.
 Light or dark is `<html data-mode>`; without it the CSS asks the device. Each dark version is written
 twice (for a dark device, and for an account that chose dark), and `test/test_themes_css.py` checks
-that the two stay the same, that every version sets every colour, and the contrast of all six.
+that the two stay the same, that every version sets every colour, and the contrast of all twelve.
 
 ## Tests
 

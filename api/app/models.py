@@ -10,7 +10,7 @@ from app.db import Base
 ROLES = ("student", "teacher")
 # How the site looks for an account, chosen under My account. The browser only shows it; a name
 # outside this list is refused by the server (app/auth.py).
-THEMES = ("standard", "halloween", "retro")
+THEMES = ("standard", "halloween", "retro", "christmas", "cozy", "minimalist")
 MODES = ("device", "light", "dark")         # light or dark: as the device is set, or always one
 
 

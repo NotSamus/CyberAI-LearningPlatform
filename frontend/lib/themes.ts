@@ -8,6 +8,9 @@ export const THEMES = [
   { id: "standard", name: "Standard", description: "UTEP blue and orange, on white or on charcoal." },
   { id: "halloween", name: "Halloween", description: "Pumpkin orange and purple, on bone white or midnight, with a few bats." },
   { id: "retro", name: "Retro 95", description: "Grey windows on a teal desktop, like a computer from 1995." },
+  { id: "christmas", name: "Christmas", description: "Pine green and cranberry red, on snow white or a winter night, with falling snow and a string of lights." },
+  { id: "cozy", name: "Cozy", description: "Oat, cocoa and terracotta, with rounded letters and soft corners: warm as a cabin." },
+  { id: "minimalist", name: "Minimalist", description: "Black on white or white on black, thin lines instead of shadows, and nothing more." },
 ] as const;
 
 // Every theme has a light and a dark version. "device": whichever the device is set to, as it changes.

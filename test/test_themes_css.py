@@ -50,6 +50,8 @@ STANDARD_LIGHT = {**_block(GLOBALS, ":root"), **_block(LEARN, ":root")}
 STANDARD_DARK_DEVICE = {**_block(GLOBALS, ':root:not([data-mode="light"])', True), **_block(LEARN, ':root:not([data-mode="light"])', True)}
 STANDARD_DARK_CHOSEN = {**_block(GLOBALS, ':root[data-mode="dark"]'), **_block(LEARN, ':root[data-mode="dark"]')}
 
+# Every theme but Standard (the names in api/app/models.py THEMES)
+THEME_IDS = ("halloween", "retro", "christmas", "cozy", "minimalist")
 
 def _theme(theme: str) -> tuple[dict, dict, dict]:
     """(light, dark for a dark device, dark when chosen) as the theme writes them."""
@@ -62,12 +64,12 @@ def _theme(theme: str) -> tuple[dict, dict, dict]:
 
 def test_the_two_dark_copies_are_the_same():
     assert STANDARD_DARK_DEVICE == STANDARD_DARK_CHOSEN
-    for theme in ("halloween", "retro"):
+    for theme in THEME_IDS:
         _, device, chosen = _theme(theme)
         assert device == chosen, theme
 
 
-@pytest.mark.parametrize("theme", ["halloween", "retro"])
+@pytest.mark.parametrize("theme", THEME_IDS)
 def test_every_version_of_a_theme_sets_every_colour(theme):
     light, dark, _ = _theme(theme)
     assert set(STANDARD_DARK_DEVICE) - set(dark) == set(), "Standard's dark colours would show through"
@@ -105,7 +107,7 @@ def _contrast(a: str, b: str) -> float:
 def _versions():
     yield "standard light", STANDARD_LIGHT
     yield "standard dark", {**STANDARD_LIGHT, **STANDARD_DARK_DEVICE}
-    for theme in ("halloween", "retro"):
+    for theme in THEME_IDS:
         light, dark, _ = _theme(theme)
         yield f"{theme} light", {**STANDARD_LIGHT, **light}
         yield f"{theme} dark", {**STANDARD_LIGHT, **STANDARD_DARK_DEVICE, **light, **dark}
