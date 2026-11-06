@@ -7,7 +7,7 @@ route checks on the server that the account is a teacher or an admin; students g
 student asking for a lesson that is a draft, or was not given to them, gets the same 404 as for
 one that does not exist.
 """
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -49,13 +49,19 @@ def _details(lesson: Lesson, course_names: dict[int, str]) -> dict:
         # Published, and edited since: students still have the version from the last Publish.
         "changed": lesson.published and lesson.blocks != lesson.live_blocks,
         "blocks_count": len(lesson.blocks),
+        "archived_at": _iso(lesson.archived_at),
     }
 
 
 @teach_router.get("/lessons")
-def list_lessons(teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+def list_lessons(archived: bool = False, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    """The lessons in use, or with `archived` the archived ones, last archived first."""
     course_names = courses.names(db)
-    query = select(Lesson).options(undefer(Lesson.blocks), undefer(Lesson.live_blocks)).order_by(Lesson.position, Lesson.id)
+    query = select(Lesson).options(undefer(Lesson.blocks), undefer(Lesson.live_blocks))
+    if archived:
+        query = query.where(Lesson.archived_at.is_not(None)).order_by(Lesson.archived_at.desc(), Lesson.id)
+    else:
+        query = query.where(Lesson.archived_at.is_(None)).order_by(Lesson.position, Lesson.id)
     return [_details(lesson, course_names) for lesson in db.scalars(query)]
 
 
@@ -130,6 +136,8 @@ def publish_lesson(lesson_id: int, teacher: PlatformUser = Depends(require_teach
     """Gives students the working copy as it is now. Refused, with the reasons, while a question in
     it is unfinished."""
     lesson = _lesson_or_404(db, lesson_id)
+    if lesson.archived_at:
+        raise HTTPException(400, "This lesson is archived. Restore it before publishing it.")
     try:
         lessons.publish(db, lesson)
     except lessons.LessonError as e:
@@ -146,9 +154,31 @@ def unpublish_lesson(lesson_id: int, teacher: PlatformUser = Depends(require_tea
     return _details(lesson, courses.names(db))
 
 
+@teach_router.post("/lessons/{lesson_id}/archive")
+def archive_lesson(lesson_id: int, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Puts the lesson away instead of deleting it: students no longer see it (it is unpublished),
+    and it moves to Archived with its pictures and their answers, until it is restored."""
+    lesson = _lesson_or_404(db, lesson_id)
+    if lesson.archived_at is None:
+        lesson.archived_at = datetime.now(timezone.utc)
+        lesson.published = False
+        db.commit()
+    return _details(lesson, courses.names(db))
+
+
+@teach_router.post("/lessons/{lesson_id}/restore")
+def restore_lesson(lesson_id: int, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Back among the lessons in use, as a draft: students see it again once it is published."""
+    lesson = _lesson_or_404(db, lesson_id)
+    lesson.archived_at = None
+    db.commit()
+    return _details(lesson, courses.names(db))
+
+
 @teach_router.delete("/lessons/{lesson_id}")
 def delete_lesson(lesson_id: int, teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
-    """Removes the lesson with its pictures and what students answered in it."""
+    """Removes the lesson for good, with its pictures and what students answered in it. The site
+    only offers this for archived lessons."""
     db.delete(_lesson_or_404(db, lesson_id))
     db.commit()
     return {"deleted": True}

@@ -11,13 +11,14 @@ import { api, download, type Course } from "@/lib/api";
 import { message } from "@/lib/errors";
 import { lessonsZip, MAX_EXPORT_LESSONS, type ManagedLesson } from "@/lib/lessons";
 
-// Which lessons the list shows: all of them, those for every student, those given to nobody, or a
-// course's ("course-<id>").
-type Filter = "all" | "everyone" | "none" | `course-${number}`;
+// Which lessons the list shows: all of them, those for every student, those given to nobody, a
+// course's ("course-<id>"), or the archived ones.
+type Filter = "all" | "everyone" | "none" | "archived" | `course-${number}`;
 
 // Lessons are written here, in the platform: text, code, pictures, videos and knowledge checks.
 export default function LessonsPage() {
   const [items, setItems] = useState<ManagedLesson[] | null>(null);
+  const [archived, setArchived] = useState<ManagedLesson[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
@@ -27,14 +28,14 @@ export default function LessonsPage() {
   const [exporting, setExporting] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([api<ManagedLesson[]>("/teach/lessons"), api<Course[]>("/teach/courses")])
-      .then(([lessons, classes]) => { setItems(lessons); setCourses(classes); })
+    Promise.all([api<ManagedLesson[]>("/teach/lessons"), api<ManagedLesson[]>("/teach/lessons?archived=true"), api<Course[]>("/teach/courses")])
+      .then(([lessons, old, classes]) => { setItems(lessons); setArchived(old); setCourses(classes); })
       .catch((e) => setLoadError(message(e)));
   }, []);
   useEffect(load, [load]);
 
   const courseId = filter.startsWith("course-") ? Number(filter.slice("course-".length)) : null;
-  const shown = (items ?? []).filter((lesson) => {
+  const shown = filter === "archived" ? archived : (items ?? []).filter((lesson) => {
     if (filter === "everyone") return lesson.for_everyone;
     if (filter === "none") return lessonForNobody(lesson);
     if (courseId !== null) return !lesson.for_everyone && lesson.course_id === courseId;
@@ -82,7 +83,7 @@ export default function LessonsPage() {
     <>
       {header}
       {error && <p className="error" role="alert">{error}</p>}
-      {items.length === 0 ? (
+      {items.length === 0 && archived.length === 0 ? (
         <EmptyState icon={BookOpen} title="No lessons yet" action={<>{newLesson}{importButton}</>}>
           Write your first lesson: start with a title, then add text, code, pictures and knowledge checks. Or import
           lessons exported from another platform.
@@ -97,12 +98,15 @@ export default function LessonsPage() {
                 <option value="everyone">For all students</option>
                 {courses.map((c) => <option key={c.id} value={`course-${c.id}`}>{c.name}</option>)}
                 <option value="none">Given to nobody</option>
+                <option value="archived">Archived ({archived.length})</option>
               </select>
             </label>
             <span className="muted">
-              {reorder
-                ? "Students see these lessons in this order. Use the arrows to change it."
-                : "To change the order students see lessons in, show one course, or the lessons for all students."}
+              {filter === "archived"
+                ? "Students do not see archived lessons. Restore one to use it again, or delete it for good."
+                : reorder
+                  ? "Students see these lessons in this order. Use the arrows to change it."
+                  : "To change the order students see lessons in, show one course, or the lessons for all students."}
             </span>
             {shown.length > 0 && (
               <button
@@ -114,7 +118,7 @@ export default function LessonsPage() {
             )}
           </div>
           {shown.length === 0
-            ? <p className="muted">No lessons here yet.</p>
+            ? <p className="muted">{filter === "archived" ? "No archived lessons." : "No lessons here yet."}</p>
             : (
               <LessonRows
                 lessons={shown} order={items.map((lesson) => lesson.id)} courses={courses} reorder={reorder}

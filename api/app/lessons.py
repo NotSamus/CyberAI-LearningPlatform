@@ -246,12 +246,14 @@ def _visible_to(user: PlatformUser):
     if user.can_teach:
         return true()
     in_their_course = exists().where(CourseStudent.course_id == Lesson.course_id, CourseStudent.user_id == user.id)
-    return and_(Lesson.published, or_(Lesson.for_everyone, in_their_course))
+    return and_(Lesson.published, Lesson.archived_at.is_(None), or_(Lesson.for_everyone, in_their_course))
 
 
 def list_visible(db: Session, user: PlatformUser) -> list[Lesson]:
-    """In the order the teachers put them in."""
-    return list(db.scalars(select(Lesson).where(_visible_to(user)).order_by(Lesson.position, Lesson.id)))
+    """In the order the teachers put them in. Archived lessons are left out for teachers too: they
+    are only under Teach > Lessons > Archived."""
+    query = select(Lesson).where(_visible_to(user), Lesson.archived_at.is_(None)).order_by(Lesson.position, Lesson.id)
+    return list(db.scalars(query))
 
 
 def get_visible(db: Session, user: PlatformUser, lesson_id: int) -> Lesson | None:

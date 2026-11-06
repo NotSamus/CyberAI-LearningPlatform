@@ -1,10 +1,11 @@
 "use client";
-import { ArrowDown, ArrowUp, BookOpen, ChartColumn, CircleAlert, CircleHelp, Download, Eye, LayoutList, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, ChartColumn, CircleAlert, CircleHelp, Download, Eye, LayoutList, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import Menu from "@/components/Menu";
 import { Label, publishLabel } from "@/components/Status";
 import { lessonFor, lessonForNobody, plural } from "@/components/teach/given";
 import { api, download, type Course } from "@/lib/api";
+import { formatWhen } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import { lessonsZip, type ManagedLesson } from "@/lib/lessons";
 
@@ -46,8 +47,19 @@ export default function LessonRows({ lessons, order, courses, reorder, withinCou
     download(lessonsZip([lesson.id])).catch((e) => onError(message(e)));
   }
 
+  // Lessons are archived rather than deleted: kept, with what students answered, until restored.
+  function archive(lesson: ManagedLesson) {
+    const sure = window.confirm(`Archive "${lesson.title}"? Students stop seeing it. It is kept under Archived, with its pictures and what students answered, and you can restore it.`);
+    if (sure) act(() => api(`/teach/lessons/${lesson.id}/archive`, { method: "POST" }));
+  }
+
+  function restore(lesson: ManagedLesson) {
+    act(() => api(`/teach/lessons/${lesson.id}/restore`, { method: "POST" }));
+  }
+
+  // Only offered for archived lessons.
   function remove(lesson: ManagedLesson) {
-    const sure = window.confirm(`Delete "${lesson.title}"? Its pictures and what students answered in it are deleted too.`);
+    const sure = window.confirm(`Delete "${lesson.title}" for good? Its pictures and what students answered in it are deleted too. This cannot be undone.`);
     if (sure) act(() => api(`/teach/lessons/${lesson.id}`, { method: "DELETE" }));
   }
 
@@ -62,10 +74,11 @@ export default function LessonRows({ lessons, order, courses, reorder, withinCou
             <div className="grow">
               <div className="title-line">
                 <Link className="title" href={`/teach/lessons/${lesson.id}`}>{lesson.title}</Link>
-                <Label standing={publishLabel(lesson)} />
+                <Label standing={lesson.archived_at ? { text: "Archived", tone: "neutral", icon: Archive } : publishLabel(lesson)} />
               </div>
               {lesson.summary && <p className="summary">{lesson.summary}</p>}
               <p className="meta">
+                {lesson.archived_at && <span className="fact"><Archive aria-hidden />Archived {formatWhen(lesson.archived_at)}</span>}
                 {!withinCourse && (
                   <span className={`fact ${nobody ? "bad" : ""}`}>
                     {nobody ? <CircleAlert aria-hidden /> : <Users aria-hidden />}
@@ -89,11 +102,16 @@ export default function LessonRows({ lessons, order, courses, reorder, withinCou
               )}
               <Menu
                 label={`More for ${lesson.title}`}
-                items={[
+                items={lesson.archived_at ? [
+                  { label: "Restore", icon: ArchiveRestore, onSelect: () => restore(lesson) },
+                  { label: "Progress", icon: ChartColumn, href: `/teach/lessons/${lesson.id}/progress` },
+                  { label: "Export as .zip", icon: Download, onSelect: () => exportOne(lesson) },
+                  { label: "Delete for good", icon: Trash2, danger: true, onSelect: () => remove(lesson) },
+                ] : [
                   { label: "Progress", icon: ChartColumn, href: `/teach/lessons/${lesson.id}/progress` },
                   { label: "Open as a student would", icon: Eye, href: `/lessons/${lesson.id}` },
                   { label: "Export as .zip", icon: Download, onSelect: () => exportOne(lesson) },
-                  { label: "Delete", icon: Trash2, danger: true, onSelect: () => remove(lesson) },
+                  { label: "Archive", icon: Archive, onSelect: () => archive(lesson) },
                 ]}
               />
             </div>

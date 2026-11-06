@@ -87,6 +87,7 @@ export type ManagedLesson = Lesson & {
   published_at: string | null;
   changed: boolean;           // edited since it was published: students still have the published version
   blocks_count: number;
+  archived_at: string | null; // archived instead of deleted: listed only under Archived, hidden from students
 };
 export type LessonDraft = ManagedLesson & { blocks: Block[] };
 
@@ -160,6 +161,17 @@ export const BLOCK_MENU: { kind: Kind; label: string; words: string[]; make: () 
   { kind: "video", label: "Video", words: ["video", "youtube"], make: () => ({ type: "video", id: newId(), url: "" }) },
   { kind: "assignment", label: "Notebook", words: ["notebook", "assignment", "lab"], make: () => ({ type: "assignment", id: newId(), assignment_id: null }) },
 ];
+
+// The line the cursor is on, when that line is a "/" command ("/", "/pic", "/short answer") and the
+// cursor is after its "/": the text before that line, what was typed after the "/", and the text
+// after the line. null otherwise. The editor's "/" menu works on any line this way, not only the last.
+export function slashAt(text: string, caret: number): { before: string; typed: string; after: string } | null {
+  const start = text.lastIndexOf("\n", caret - 1) + 1;
+  const newline = text.indexOf("\n", caret);
+  const line = text.slice(start, newline === -1 ? text.length : newline);
+  if (caret <= start || !/^\/[a-z ]{0,20}$/i.test(line)) return null;
+  return { before: text.slice(0, start), typed: line.slice(1).toLowerCase(), after: newline === -1 ? "" : text.slice(newline + 1) };
+}
 
 export const BLOCK_LABELS: Record<Block["type"], string> = {
   text: "Text", code: "Code", callout: "Callout", image: "Picture", video: "Video", assignment: "Notebook assignment",

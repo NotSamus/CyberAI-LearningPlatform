@@ -1,7 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, CircleAlert, Copy, Download, Eye, Plus, Send, Trash2, Undo2, Users, X } from "lucide-react";
+import {
+  ArrowDown, ArrowUp, CircleAlert, Code, Copy, Download, Eye, GripVertical, ImageIcon, ImagePlus, Images, LayoutList, Lightbulb,
+  ListChecks, NotebookPen, PenLine, Plus, Send, ToggleLeft, Trash2, Type, Undo2, Users, Video, X, type LucideIcon,
+} from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import LessonRail, { leftLesson } from "@/components/LessonRail";
 import Markdown from "@/components/Markdown";
@@ -14,7 +17,7 @@ import { api, download, type Course, type ManagedAssignment } from "@/lib/api";
 import { formatWhen } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import {
-  BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, blockLabel, duplicate, importText, lessonsZip, newId, outline, youtubeId,
+  BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, blockLabel, duplicate, importText, lessonsZip, newId, outline, slashAt, youtubeId,
   type Block, type Kind, type LessonDraft, type ManagedLesson, type Picture, type Tone,
 } from "@/lib/lessons";
 
@@ -24,6 +27,22 @@ type Of<T extends Block["type"]> = Extract<Block, { type: T }>;
 function make(kind: Kind): Block {
   return BLOCK_MENU.find((item) => item.kind === kind)!.make();
 }
+
+// The "/" menu, in sections with an icon for each block.
+const SECTIONS: { title: string; kinds: Kind[] }[] = [
+  { title: "Writing", kinds: ["text", "callout", "code"] },
+  { title: "Questions", kinds: ["multiple_choice", "true_false", "short_answer", "picture_choice", "picture_true_false"] },
+  { title: "Media", kinds: ["image", "video", "assignment"] },
+];
+const ICONS: Record<Kind, LucideIcon> = {
+  text: Type, callout: Lightbulb, code: Code, multiple_choice: ListChecks, true_false: ToggleLeft, short_answer: PenLine,
+  picture_choice: Images, picture_true_false: ImagePlus, image: ImageIcon, video: Video, assignment: NotebookPen,
+};
+
+// How the editor shows a lesson: as separate blocks, or as one page to write on (Notion-like).
+// Only the look changes, never the lesson; each browser remembers the last choice.
+type View = "blocks" | "freestyle";
+const VIEW_KEY = "cyberai_lesson_view";
 
 // What is sent to the server when the lesson is saved. An emptied title is left out: the saved one stays.
 function toSave(title: string, summary: string, audience: string, blocks: Block[]): string {
@@ -55,6 +74,21 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
   const [busy, setBusy] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);    // a block or option to put the cursor in
   const active = useRef<string | null>(null);             // the block being worked on: pasted pictures go after it
+  const [view, setView] = useState<View>("blocks");
+
+  // After the first render, not in useState: the server draws the page first and has no localStorage.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VIEW_KEY) === "freestyle") setView("freestyle");
+    } catch { /* storage blocked: blocks, as by default */ }
+  }, []);
+
+  function chooseView(next: View) {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch { /* not remembered, still shown */ }
+  }
 
   const draft = useMemo(() => toSave(title, summary, audience, blocks), [title, summary, audience, blocks]);
   const latest = useRef(draft);                           // what is on screen
@@ -162,15 +196,24 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     });
   }
 
-  // "/" in a text block: the block becomes the chosen one, or, when there is text above the "/",
-  // the chosen one is added below it.
-  function slash(block: Of<"text">, kind: Kind, before: string) {
+  // "/" on a line of a text block: the chosen block takes that line's place. The text above it stays
+  // in the block, and the text below it goes on in a text block of its own after the chosen one.
+  function slash(block: Of<"text">, kind: Kind, before: string, after: string) {
     const made = make(kind);
     setBlocks((all) => all.flatMap((b) => {
       if (b.id !== block.id) return [b];
-      return before.trim() === "" ? [made] : [{ ...block, text: before.trimEnd() }, made];
+      const kept: Block[] = before.trim() === "" ? [made] : [{ ...block, text: before.trimEnd() }, made];
+      return after.trim() === "" ? kept : [...kept, { type: "text", id: newId(), text: after }];
     }));
     setFocus(made.id);
+  }
+
+  // Freestyle: a click under the last block goes on writing there, in a new text block unless the
+  // last one is still empty.
+  function keepWriting() {
+    const last = blocks[blocks.length - 1];
+    if (last?.type === "text" && last.text.trim() === "") setFocus(last.id);
+    else insert(blocks.length, make("text"));
   }
 
   async function uploadPicture(file: File): Promise<number | null> {
@@ -291,6 +334,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
   const seen = !lesson.published ? "Students cannot see this lesson until you publish it."
     : upToDate ? "Students see the lesson as it is here."
       : `Students still see the version of ${formatWhen(lesson.published_at)}.`;
+  const free = view === "freestyle";
 
   return (
     <div
@@ -343,6 +387,10 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
         }
         actions={
           <>
+            <div className="view-switch" role="group" aria-label="How the lesson is shown while writing">
+              <button type="button" className="secondary" aria-pressed={!free} onClick={() => chooseView("blocks")}><LayoutList aria-hidden />Blocks</button>
+              <button type="button" className="secondary" aria-pressed={free} onClick={() => chooseView("freestyle")}><PenLine aria-hidden />Freestyle</button>
+            </div>
             <button className="secondary" onClick={preview}><Eye aria-hidden />Preview</button>
             <button disabled={busy || (lesson.published && upToDate)} onClick={publish}>
               <Send aria-hidden />{busy ? "Publishing…" : lesson.published ? "Publish changes" : "Publish"}
@@ -360,7 +408,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
       />
       {rail}
 
-    <div className="editor">
+    <div className={`editor ${free ? "freestyle" : ""}`}>
       {title.trim() === "" && <p className="error">A lesson needs a title: until it has one, the earlier title is kept.</p>}
       {lesson.published && audience === "none" && (
         <p className="error">Published, but given to nobody: no student can see it. Choose who it is for, above.</p>
@@ -378,9 +426,9 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
 
       {blocks.map((block, index) => (
         <Fragment key={block.id}>
-          {index > 0 && <AddHere onAdd={(kind) => insert(index, make(kind))} />}
+          {!free && index > 0 && <AddHere onAdd={(kind) => insert(index, make(kind))} />}
           <div
-            className="block"
+            className="block" data-type={block.type}
             onFocus={() => { active.current = block.id; }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -389,19 +437,37 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
               }
             }}
           >
-            <div className="block-bar">
-              <span className="check-label">{blockLabel(block)}</span>
-              <span className="spacer" />
-              <button className="icon" title="Move up" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden /></button>
-              <button className="icon" title="Move down" aria-label="Move down" disabled={index === blocks.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden /></button>
-              <button className="icon" title="Duplicate" aria-label="Duplicate" onClick={() => insert(index + 1, duplicate(block))}><Copy aria-hidden /></button>
-              <button className="icon danger" title="Delete" aria-label="Delete" onClick={() => remove(index)}><Trash2 aria-hidden /></button>
-            </div>
+            {free ? (
+              <>
+                {/* A handle beside the block, shown on hover or while working in it, like Notion's */}
+                <div className="block-handle">
+                  <Menu
+                    label={`Move, copy or delete this ${blockLabel(block).toLowerCase()} block`} trigger={<GripVertical aria-hidden />}
+                    items={[
+                      { label: "Move up", icon: ArrowUp, disabled: index === 0, onSelect: () => move(index, -1) },
+                      { label: "Move down", icon: ArrowDown, disabled: index === blocks.length - 1, onSelect: () => move(index, 1) },
+                      { label: "Duplicate", icon: Copy, onSelect: () => insert(index + 1, duplicate(block)) },
+                      { label: "Delete", icon: Trash2, danger: true, onSelect: () => remove(index) },
+                    ]}
+                  />
+                </div>
+                {block.type !== "text" && <span className="check-label">{blockLabel(block)}</span>}
+              </>
+            ) : (
+              <div className="block-bar">
+                <span className="check-label">{blockLabel(block)}</span>
+                <span className="spacer" />
+                <button className="icon" title="Move up" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden /></button>
+                <button className="icon" title="Move down" aria-label="Move down" disabled={index === blocks.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden /></button>
+                <button className="icon" title="Duplicate" aria-label="Duplicate" onClick={() => insert(index + 1, duplicate(block))}><Copy aria-hidden /></button>
+                <button className="icon danger" title="Delete" aria-label="Delete" onClick={() => remove(index)}><Trash2 aria-hidden /></button>
+              </div>
+            )}
             {block.type === "text" && (
               <TextEditor
                 block={block}
                 onChange={(changes) => change(block.id, changes)}
-                onSlash={(kind, before) => slash(block, kind, before)}
+                onSlash={(kind, before, after) => slash(block, kind, before, after)}
                 onEmptyBackspace={() => { if (blocks.length > 1) remove(index); }}
               />
             )}
@@ -462,16 +528,28 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
         </Fragment>
       ))}
 
-      <div className="add-block">
-        <span className="muted">Add</span>
-        {BLOCK_MENU.map((item) => (
-          <button key={item.kind} className="secondary" onClick={() => insert(blocks.length, make(item.kind))}>{item.label}</button>
-        ))}
-      </div>
-      <p className="muted hint">
-        Quicker from the keyboard: type <kbd>/</kbd> on an empty line of a text block to turn it into another block,
-        press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> for a new text block below, and paste or drop pictures anywhere.
-      </p>
+      {free ? (
+        <>
+          <button type="button" className="keep-writing" onClick={keepWriting}>Click here to keep writing</button>
+          <p className="muted hint">
+            Type <kbd>/</kbd> at the start of any line for a question, code, a picture or a video. Markdown works as you type:
+            <kbd>#</kbd> for a heading, <kbd>**bold**</kbd>, <kbd>-</kbd> for a list. Paste or drop pictures anywhere.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="add-block">
+            <span className="muted">Add</span>
+            {BLOCK_MENU.map((item) => (
+              <button key={item.kind} className="secondary" onClick={() => insert(blocks.length, make(item.kind))}>{item.label}</button>
+            ))}
+          </div>
+          <p className="muted hint">
+            Quicker from the keyboard: type <kbd>/</kbd> at the start of any line of a text block for another block there,
+            press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> for a new text block below, and paste or drop pictures anywhere.
+          </p>
+        </>
+      )}
       <ImportText onImport={(made) => { setBlocks((all) => [...all, ...made]); setFocus(made[0]?.id ?? null); }} />
     </div>
     </div>
@@ -508,15 +586,16 @@ function AddHere({ onAdd }: { onAdd: (kind: Kind) => void }) {
 }
 
 // Text is shown as readers will see it, and becomes a text field while it is being edited, like a
-// text cell in a notebook. A last line that starts with "/" opens the menu of blocks.
+// text cell in a notebook. A line that starts with "/", where the cursor is, opens the menu of blocks.
 function TextEditor({ block, onChange, onSlash, onEmptyBackspace }: {
   block: Of<"text">;
   onChange: (changes: Partial<Of<"text">>) => void;
-  onSlash: (kind: Kind, before: string) => void;
+  onSlash: (kind: Kind, before: string, after: string) => void;
   onEmptyBackspace: () => void;
 }) {
   const [editing, setEditing] = useState(block.text.trim() === "");
-  const [picked, setPicked] = useState(0);
+  const [picked, setPicked] = useState<number | null>(null);   // null: the best match
+  const [caret, setCaret] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);    // by Esc, until the text changes
   const area = useRef<HTMLTextAreaElement | null>(null);
   const takeCursor = useRef(false);
@@ -537,27 +616,31 @@ function TextEditor({ block, onChange, onSlash, onEmptyBackspace }: {
     );
   }
 
-  const lastLine = block.text.slice(block.text.lastIndexOf("\n") + 1);
-  const typed = /^\/[a-z ]{0,20}$/i.test(lastLine) ? lastLine.slice(1).toLowerCase() : null;
-  const menu = typed === null || menuClosed ? [] : BLOCK_MENU.filter((item) => item.words.some((word) => word.startsWith(typed)));
-  const choose = (kind: Kind) => onSlash(kind, block.text.slice(0, block.text.length - lastLine.length));
+  const found = slashAt(block.text, caret);
+  // Matches in BLOCK_MENU's order, which puts the best one first ("/pic" is a picture, not a picture
+  // question): that one is picked to begin with. They are shown by section.
+  const matches = found === null || menuClosed ? [] : BLOCK_MENU.filter((item) => item.words.some((word) => word.startsWith(found.typed)));
+  const shown = SECTIONS.flatMap((section) => matches.filter((item) => section.kinds.includes(item.kind)));
+  const current = Math.min(picked ?? shown.indexOf(matches[0]), shown.length - 1);
+  const choose = (kind: Kind) => { if (found) onSlash(kind, found.before, found.after); };
 
   return (
     <div className="text-editor">
       <Growing
         inputRef={area} data-focus={block.id} value={block.text} maxLength={20000} aria-label="Text"
         placeholder="Write here (Markdown), or type / for a question, code, a picture…"
-        onChange={(e) => { setMenuClosed(false); setPicked(0); onChange({ text: e.target.value }); }}
+        onChange={(e) => { setMenuClosed(false); setPicked(null); setCaret(e.target.selectionStart); onChange({ text: e.target.value }); }}
+        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onBlur={() => { if (block.text.trim() !== "") setEditing(false); }}
         onKeyDown={(e) => {
-          if (menu.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+          if (shown.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
             e.preventDefault();
-            setPicked((n) => (n + (e.key === "ArrowDown" ? 1 : menu.length - 1)) % menu.length);
-          } else if (menu.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
+            setPicked((current + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
+          } else if (shown.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
             e.preventDefault();
             e.stopPropagation();
-            choose(menu[Math.min(picked, menu.length - 1)].kind);
-          } else if (menu.length > 0 && e.key === "Escape") {
+            choose(shown[current].kind);
+          } else if (shown.length > 0 && e.key === "Escape") {
             setMenuClosed(true);
           } else if (e.key === "Backspace" && block.text === "") {
             e.preventDefault();
@@ -565,17 +648,30 @@ function TextEditor({ block, onChange, onSlash, onEmptyBackspace }: {
           }
         }}
       />
-      {menu.length > 0 && (
-        <ul className="slash-menu" role="listbox" aria-label="Blocks">
-          {menu.map((item, n) => (
-            <li
-              key={item.kind} role="option" aria-selected={n === picked} className={n === picked ? "picked" : ""}
-              onMouseDown={(e) => { e.preventDefault(); choose(item.kind); }}
-            >
-              {item.label}
-            </li>
-          ))}
-        </ul>
+      {shown.length > 0 && (
+        <div className="slash-menu" role="listbox" aria-label="Blocks">
+          {SECTIONS.map((section) => {
+            const items = shown.filter((item) => section.kinds.includes(item.kind));
+            if (items.length === 0) return null;
+            return (
+              <div key={section.title} role="group" aria-label={section.title}>
+                <div className="slash-section" aria-hidden>{section.title}</div>
+                {items.map((item) => {
+                  const n = shown.indexOf(item), Icon = ICONS[item.kind];
+                  return (
+                    <div
+                      key={item.kind} role="option" aria-selected={n === current} className={n === current ? "picked" : ""}
+                      ref={n === current ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}      // kept in view while the arrows move through a long menu
+                      onMouseDown={(e) => { e.preventDefault(); choose(item.kind); }}
+                    >
+                      <Icon aria-hidden />{item.label}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

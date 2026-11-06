@@ -320,8 +320,14 @@ Writing is meant to be quick:
 
 - Everything is **saved by itself** a moment after you stop typing. There is no Save button.
 - Text blocks show the result, and turn into a text field when you click them, like notebook cells.
-- Type `/` on an empty line of a text block for the menu of blocks (`/mu` + Enter gives a multiple-choice
-  question). **Ctrl/⌘ + Enter** adds a text block below the block you are in.
+- Type `/` at the start of any line of a text block for the menu of blocks, in sections (Writing,
+  Questions, Media); `/mu` + Enter gives a multiple-choice question. The block takes that line's place,
+  and the text after it goes on below the new block. **Ctrl/⌘ + Enter** adds a text block below the block you are in.
+- **Blocks | Freestyle** (at the top, next to Preview) picks how the lesson looks while you write, and each
+  browser remembers it. Blocks shows every block as a card with its label and buttons. Freestyle shows the
+  lesson as one page, like Notion or Word: text sits on the page with no boxes, even while you type in it, each block has a ⋮⋮ handle on its left
+  (on hover, or always on an iPad) to move, copy or delete it, and a click under the last block goes on
+  writing. Only the look changes: the lesson, and what students see, is the same in both.
 - In a question, **Enter** adds the next option and starting an option with `*` ticks it as correct.
   Options left empty are ignored.
 - **Write or paste a whole lesson as text** (at the bottom of the editor) turns one piece of text into
@@ -336,6 +342,11 @@ accepted answer). **Preview** shows your working copy as a student would see it,
 **For** (top of the editor) chooses who gets the lesson: all students or one course. The arrows in the
 list of lessons (Teach > Lessons with one course chosen, or the course's page) set the order students see
 them in. A lesson's **Progress** tab shows who has done it.
+
+Lessons are **archived, not deleted**: **Archive** in a lesson's ⋯ menu unpublishes it and moves it,
+with its pictures and what students answered, to **Archived** (the last choice of Show on Teach >
+Lessons). Students no longer see it, and it leaves every other list. There, **Restore** brings it back
+as a draft (Publish to give it to students again), and **Delete for good** removes it with everything in it, which cannot be undone.
 
 While you write, the left side of the editor lists **every lesson** in that order, each with where it
 stands: Draft (an empty ring), Published (a green tick) or Changes not published (a dashed blue ring). Click one to

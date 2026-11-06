@@ -175,9 +175,35 @@ textarea.mono { overflow-x: auto; white-space: pre; }
 .rendered { min-height: var(--s7); padding: var(--s3); border-radius: var(--radius); cursor: text; }
 .rendered:hover { background: var(--tint); }
 .text-editor { position: relative; }
-.slash-menu { position: absolute; z-index: 3; top: 100%; left: 0; min-width: var(--w-rail); margin: var(--s1) 0 0; padding: var(--s1); list-style: none; background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-3); }
-.slash-menu li { padding: var(--s2) var(--s3); border-radius: var(--radius-small); cursor: pointer; }
-.slash-menu li.picked, .slash-menu li:hover { background: var(--tint); }
+.slash-menu { position: absolute; z-index: 3; top: 100%; left: 0; min-width: var(--w-rail); max-height: calc(5 * var(--s8) + var(--s6)); margin: var(--s1) 0 0; padding: var(--s1); overflow-y: auto; background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow-3); }
+.slash-section { padding: var(--s2) var(--s3) var(--s1); color: var(--muted); font-size: var(--t-xs); font-weight: var(--bold); letter-spacing: 0.05em; text-transform: uppercase; }
+.slash-menu [role="option"] { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-radius: var(--radius-small); cursor: pointer; }
+.slash-menu [role="option"] svg { flex: none; width: var(--icon); height: var(--icon); color: var(--muted); }
+.slash-menu [role="option"].picked, .slash-menu [role="option"]:hover { background: var(--tint); }
+/* Blocks or Freestyle: two buttons joined into one control, the chosen one pressed in */
+.view-switch { display: inline-flex; }
+.view-switch button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.view-switch button:last-child { margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.view-switch button[aria-pressed="true"] { position: relative; background: var(--accent-tint); color: var(--text); border-color: var(--accent); }
+/* Freestyle: the lesson as one page to write on, like Notion. Text sits on the page; questions,
+   code and pictures stay cards. Each block has a handle on its left, for moving, copying and
+   deleting it: shown on hover and while working in the block, always on a touch screen. */
+.editor.freestyle .block { position: relative; padding-left: calc(var(--s6) + var(--s2)); }
+.editor.freestyle .block[data-type="text"], .editor.freestyle .block[data-type="text"]:focus-within { padding-top: 0; padding-right: 0; padding-bottom: 0; background: transparent; border-color: transparent; box-shadow: none; }
+.block-handle { position: absolute; top: var(--s2); left: var(--s1); opacity: 0; transition: opacity 120ms; }
+.editor.freestyle .block:is(:hover, :focus-within) > .block-handle { opacity: 1; }
+@media (hover: none) {
+  .block-handle { opacity: 1; }
+}
+.block-handle .menu-list { right: auto; left: 0; }      /* opens to the right: on the left there is the edge of the column */
+.editor.freestyle .block > .check-label { margin: 0; }
+/* Typing looks like the text it becomes, so the page does not jump when a paragraph is clicked, and
+   there is no box around it, as on a page in Word: the cursor, and the handle beside it, show where
+   you are writing. */
+.editor.freestyle .rendered:hover { background: transparent; }
+.editor.freestyle .text-editor textarea, .editor.freestyle .text-editor textarea:focus { padding: var(--s3); background: transparent; border-color: transparent; box-shadow: none; outline: none; font-size: var(--t-lg); line-height: 1.7; }
+button.keep-writing { justify-content: flex-start; min-height: var(--s8); padding: var(--s3) var(--s3) var(--s3) calc(var(--s6) + var(--s2) + var(--s3)); background: transparent; color: var(--muted); border: 0; box-shadow: none; font-size: var(--t-lg); font-weight: 400; cursor: text; }
+button.keep-writing:hover:not(:disabled) { background: transparent; color: var(--text); }
 .option-list { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .option-list li { display: flex; align-items: center; gap: var(--s2); }
 .option-list input[type="checkbox"] { order: -1; width: var(--s5); height: var(--s5); accent-color: var(--gpu); }

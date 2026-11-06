@@ -186,6 +186,9 @@ class Lesson(Base):
     for_everyone: Mapped[bool] = mapped_column(default=False)
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), index=True)
     position: Mapped[int] = mapped_column(default=0)                    # the order lessons are listed in, lowest first
+    # Archived instead of deleted: kept with its pictures and answers, shown only under Teach >
+    # Lessons > Archived, and hidden from students (archiving also unpublishes it).
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

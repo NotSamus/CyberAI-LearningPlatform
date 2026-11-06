@@ -54,6 +54,7 @@ def test_a_lesson_is_written_as_a_draft_and_then_published(people, db):
     assert r.json() == {
         "id": 1, "title": "TLS basics", "summary": "", "published": False, "course_id": None, "course": None,
         "questions": 0, "for_everyone": False, "published_at": None, "changed": False, "blocks_count": 0,
+        "archived_at": None,
     }
 
     # The working copy is saved as it is, unfinished questions included...
@@ -86,6 +87,28 @@ def test_a_lesson_is_written_as_a_draft_and_then_published(people, db):
     assert teacher.delete("/api/teach/lessons/1").json() == {"deleted": True}
     assert teacher.get("/api/teach/lessons").json() == [] and teacher.get("/api/teach/lessons/1").status_code == 404
 
+
+def test_a_lesson_is_archived_instead_of_deleted_and_can_be_restored(people, db):
+    teacher, maria, _ = people
+    lesson_id = write(teacher, [text(), choice()])
+    assert answer(maria, "quiz1", lesson_id, choices=["quiz1-1"]).status_code == 200
+
+    r = teacher.post(f"/api/teach/lessons/{lesson_id}/archive")
+    assert r.status_code == 200 and r.json()["archived_at"] and r.json()["published"] is False
+    # Gone for students, and from every list but Archived (the teacher's Home too)
+    assert titles(maria) == [] and maria.get(f"/api/lessons/{lesson_id}").status_code == 404
+    assert titles(teacher) == [] and teacher.get("/api/teach/lessons").json() == []
+    assert [lesson["id"] for lesson in teacher.get("/api/teach/lessons?archived=true").json()] == [lesson_id]
+    r = teacher.post(f"/api/teach/lessons/{lesson_id}/publish")                         # not while archived
+    assert r.status_code == 400 and "archived" in r.json()["detail"]
+
+    # Restored as a draft, with what students answered kept
+    r = teacher.post(f"/api/teach/lessons/{lesson_id}/restore")
+    assert r.status_code == 200 and (r.json()["archived_at"], r.json()["published"]) == (None, False)
+    assert teacher.get("/api/teach/lessons?archived=true").json() == []
+    assert db.scalar(select(func.count()).select_from(LessonAnswer)) == 1
+    assert teacher.post(f"/api/teach/lessons/{lesson_id}/publish").status_code == 200
+    assert titles(maria) == ["TLS basics"]
 
 def test_what_cannot_be_published(people, db):
     teacher, _, _ = people
@@ -515,6 +538,8 @@ def test_students_cannot_write_lessons(people, db):
         assert client.post("/api/teach/lessons/1/unpublish").status_code == refusal
         assert client.get("/api/teach/lessons/1/progress").status_code == refusal
         assert client.delete("/api/teach/lessons/1").status_code == refusal
+        assert client.post("/api/teach/lessons/1/archive").status_code == refusal
+        assert client.post("/api/teach/lessons/1/restore").status_code == refusal
         assert client.post("/api/teach/lesson-images", data={"lesson_id": "1"}, files={"file": ("a.png", PNG)}).status_code == refusal
     for path in ("/api/lessons", "/api/lessons/1"):
         assert TestClient(app).get(path).status_code == 401
