@@ -29,8 +29,6 @@
   --bar-edge: transparent;
   --spark: hsl(31, 100%, 50%);
   --avatar: hsl(220, 60%, 32%);
-  --mark-from: hsl(215, 70%, 32%);      /* the logo's square, from its top left corner to its bottom right one */
-  --mark-to: hsl(215, 89%, 14%);
   /* Type faces: the device's own, and one for code */
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -185,7 +183,7 @@ input.grow { flex: 1; min-width: var(--w-menu); }
 .topbar .spacer { flex: 1; }
 .brand { display: inline-flex; align-items: center; gap: var(--s2); color: var(--bar-text); font-size: var(--t-lg); font-weight: var(--bold); letter-spacing: -0.01em; text-decoration: none; }
 .brand .ai { color: var(--spark); }
-.brand svg { width: var(--s6); height: var(--s6); }
+.brand img { width: auto; height: var(--s6); }
 .topnav { display: flex; align-items: center; gap: var(--s1); }
 .topnav a { display: inline-flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); color: var(--bar-muted); border-radius: var(--radius); font-size: var(--t-sm); font-weight: var(--bold); text-decoration: none; }
 .topnav a:hover { background: var(--bar-hover); color: var(--bar-text); }

@@ -39,8 +39,6 @@
   --bar-edge: transparent;
   --spark: hsl(32, 100%, 60%);
   --avatar: hsl(28, 70%, 35%);
-  --mark-from: hsl(28, 90%, 48%);
-  --mark-to: hsl(270, 50%, 18%);
   --shadow-1: 0 1px 3px hsla(270, 30%, 15%, 0.12), 0 1px 2px hsla(270, 30%, 15%, 0.22);
   --shadow-2: 0 3px 6px hsla(270, 30%, 15%, 0.15), 0 2px 4px hsla(270, 30%, 15%, 0.12);
   --shadow-3: 0 10px 20px hsla(270, 30%, 15%, 0.15), 0 3px 6px hsla(270, 30%, 15%, 0.1);
@@ -91,8 +89,6 @@
     --bar-edge: hsl(270, 25%, 20%);
     --spark: hsl(32, 100%, 60%);
     --avatar: hsl(28, 70%, 35%);
-    --mark-from: hsl(28, 90%, 48%);
-    --mark-to: hsl(270, 50%, 18%);
     --shadow-1: 0 1px 3px hsla(0, 0%, 0%, 0.5), 0 1px 2px hsla(0, 0%, 0%, 0.6);
     --shadow-2: 0 3px 6px hsla(0, 0%, 0%, 0.55), 0 2px 4px hsla(0, 0%, 0%, 0.5);
     --shadow-3: 0 10px 24px hsla(0, 0%, 0%, 0.6), 0 3px 6px hsla(0, 0%, 0%, 0.5);
@@ -142,8 +138,6 @@
   --bar-edge: hsl(270, 25%, 20%);
   --spark: hsl(32, 100%, 60%);
   --avatar: hsl(28, 70%, 35%);
-  --mark-from: hsl(28, 90%, 48%);
-  --mark-to: hsl(270, 50%, 18%);
   --shadow-1: 0 1px 3px hsla(0, 0%, 0%, 0.5), 0 1px 2px hsla(0, 0%, 0%, 0.6);
   --shadow-2: 0 3px 6px hsla(0, 0%, 0%, 0.55), 0 2px 4px hsla(0, 0%, 0%, 0.5);
   --shadow-3: 0 10px 24px hsla(0, 0%, 0%, 0.6), 0 3px 6px hsla(0, 0%, 0%, 0.5);
@@ -219,8 +213,6 @@
   --bar-edge: transparent;
   --spark: hsl(240, 100%, 25%);
   --avatar: hsl(240, 100%, 25%);
-  --mark-from: hsl(180, 100%, 25%);
-  --mark-to: hsl(240, 100%, 25%);
   --code-bg: hsl(0, 0%, 100%);
   --code-text: hsl(0, 0%, 0%);
   --code-head: hsl(0, 0%, 75%);
@@ -278,8 +270,6 @@
     --bar-edge: transparent;
     --spark: hsl(215, 100%, 76%);
     --avatar: hsl(215, 100%, 76%);
-    --mark-from: hsl(180, 100%, 25%);
-    --mark-to: hsl(240, 100%, 25%);
     --code-bg: hsl(0, 0%, 8%);
     --code-text: hsl(0, 0%, 92%);
     --code-head: hsl(0, 0%, 22%);
@@ -336,8 +326,6 @@
   --bar-edge: transparent;
   --spark: hsl(215, 100%, 76%);
   --avatar: hsl(215, 100%, 76%);
-  --mark-from: hsl(180, 100%, 25%);
-  --mark-to: hsl(240, 100%, 25%);
   --code-bg: hsl(0, 0%, 8%);
   --code-text: hsl(0, 0%, 92%);
   --code-head: hsl(0, 0%, 22%);
@@ -359,7 +347,7 @@
 :root[data-theme="retro"] .topbar { border-bottom: 0; }
 :root[data-theme="retro"] .topbar :focus-visible { outline: 1px dotted var(--focus-line); outline-offset: -4px; }
 :root[data-theme="retro"] .brand { padding: var(--s1) var(--s2); box-shadow: var(--bevel-out); font-size: var(--t-base); }
-:root[data-theme="retro"] .brand svg { width: var(--s5); height: var(--s5); }
+:root[data-theme="retro"] .brand img { width: auto; height: var(--s5); }
 :root[data-theme="retro"] .topnav a { color: var(--text); box-shadow: var(--bevel-out); font-weight: 400; }
 :root[data-theme="retro"] .topnav a:hover { background: var(--card); }
 :root[data-theme="retro"] .topnav a.active { background: repeating-conic-gradient(var(--card) 0% 25%, var(--checker) 0% 50%) 0 0 / 2px 2px; color: var(--text); box-shadow: var(--bevel-in); font-weight: var(--bold); }
