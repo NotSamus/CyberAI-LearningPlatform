@@ -3,6 +3,7 @@ import { BookOpen, Cpu, ListChecks, NotebookPen } from "lucide-react";
 import DueDate from "@/components/DueDate";
 import ProgressBar from "@/components/ProgressBar";
 import Status, { Label, lessonLabel, publishLabel } from "@/components/Status";
+import TagChips from "@/components/TagChips";
 import { courseName, type CourseGroup } from "@/components/learn/courses";
 
 function count(n: number, one: string, many: string): string {
@@ -38,6 +39,7 @@ export default function CourseSection({ group, asTeacher, gpuOn }: { group: Cour
             <div className="grow">
               <Link href={`/lessons/${lesson.id}`} className="title">{lesson.title}</Link>
               {lesson.summary && <span className="summary clamp-2">{lesson.summary}</span>}
+              <TagChips tags={lesson.tags} />
               {lesson.questions > 0 && (
                 <p className="meta">
                   <span className="fact">

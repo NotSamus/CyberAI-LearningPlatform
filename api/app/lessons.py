@@ -32,6 +32,9 @@ from app.models import CourseStudent, Lesson, LessonAnswer, LessonImage, LessonP
 
 MAX_TITLE_LENGTH = 120
 MAX_SUMMARY_LENGTH = 300
+MAX_TAGS = 8
+MAX_TAG_LENGTH = 30
+SUGGESTED_TAGS = ("Cybersecurity", "AI")      # offered first, and spelled this way whatever is typed
 MAX_BLOCKS = 200
 MAX_TEXT_LENGTH = 20_000            # one text, code or callout block
 MAX_QUESTION_LENGTH = 2000          # a question, and its explanation
@@ -276,6 +279,7 @@ def summary(lesson: Lesson, course_names: dict[int, str]) -> dict:
         "course_id": lesson.course_id,
         "course": course_names.get(lesson.course_id) if lesson.course_id else None,
         "questions": lesson.questions,
+        "tags": lesson.tags,
     }
 
 
@@ -508,6 +512,42 @@ def check_summary(text: str) -> str:
     if len(text) > MAX_SUMMARY_LENGTH:
         raise LessonError(f"Summaries are at most {MAX_SUMMARY_LENGTH} characters.")
     return text
+
+
+def clean_tags(tags: list[str]) -> list[str]:
+    """Tags with their spaces tidied, each once whatever its capitals (the first spelling wins)."""
+    cleaned, seen = [], set()
+    for raw in tags:
+        tag = " ".join(raw.split())
+        if not tag or tag.lower() in seen:
+            continue
+        if len(tag) > MAX_TAG_LENGTH:
+            raise LessonError(f"Tags are at most {MAX_TAG_LENGTH} characters.")
+        seen.add(tag.lower())
+        cleaned.append(tag)
+    if len(cleaned) > MAX_TAGS:
+        raise LessonError(f"A lesson has at most {MAX_TAGS} tags.")
+    return cleaned
+
+
+def tags_in_use(db: Session, leaving_out: int | None = None) -> list[str]:
+    """The suggested tags, then every other tag on a lesson, most used first. `leaving_out`: a
+    lesson whose own tags do not count (so that its teacher can still change how one is spelled)."""
+    query = select(Lesson.tags) if leaving_out is None else select(Lesson.tags).where(Lesson.id != leaving_out)
+    counts: dict[str, list] = {}            # lowercase -> [spelling, how many lessons]
+    for tags in db.scalars(query):
+        for tag in tags:
+            counts.setdefault(tag.lower(), [tag, 0])[1] += 1
+    suggested = {tag.lower() for tag in SUGGESTED_TAGS}
+    used = sorted((pair for key, pair in counts.items() if key not in suggested), key=lambda pair: (-pair[1], pair[0].lower()))
+    return [*SUGGESTED_TAGS, *(spelling for spelling, _ in used)]
+
+
+def check_tags(db: Session, tags: list[str], lesson_id: int | None = None) -> list[str]:
+    """Clean tags, spelled as other lessons (or the suggested tags) already spell them, so that "ai"
+    and "AI" stay one tag."""
+    known = {tag.lower(): tag for tag in tags_in_use(db, leaving_out=lesson_id)}
+    return [known.get(tag.lower(), tag) for tag in clean_tags(tags)]
 
 
 def create(db: Session, title: str, created_by: int | None) -> Lesson:

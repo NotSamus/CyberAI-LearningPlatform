@@ -180,6 +180,13 @@ textarea.mono { overflow-x: auto; white-space: pre; }
 .slash-menu [role="option"] { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-radius: var(--radius-small); cursor: pointer; }
 .slash-menu [role="option"] svg { flex: none; width: var(--icon); height: var(--icon); color: var(--muted); }
 .slash-menu [role="option"].picked, .slash-menu [role="option"]:hover { background: var(--tint); }
+/* The lesson's tags in the editor's header: chips with an ×, a short field to add one, quick-add buttons */
+.tag-picker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.tag-picker > svg { flex: none; width: var(--icon); height: var(--icon); color: var(--muted); }
+.tag-picker .tag { padding-right: 0; }
+.tag-picker .tag button.icon { width: var(--s5); height: var(--s5); color: var(--muted); }
+.tag-picker .tag button.icon svg { width: var(--icon-xs); height: var(--icon-xs); }
+.tag-picker input { width: calc(2 * var(--s8)); padding: var(--s1) var(--s2); font-size: var(--t-sm); }
 /* Blocks or Freestyle: two buttons joined into one control, the chosen one pressed in */
 .view-switch { display: inline-flex; }
 .view-switch button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -196,6 +203,12 @@ textarea.mono { overflow-x: auto; white-space: pre; }
   .block-handle { opacity: 1; }
 }
 .block-handle .menu-list { right: auto; left: 0; }      /* opens to the right: on the left there is the edge of the column */
+.block-handle, .block-handle button.icon { cursor: grab; }
+/* Dragging a block: it fades where it was, and a line shows where it will land */
+.editor.freestyle .block.dragging { opacity: 0.4; }
+.editor.freestyle .block:is(.drop-before, .drop-after)::before { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); border-radius: var(--pill); pointer-events: none; }
+.editor.freestyle .block.drop-before::before { top: calc(var(--s3) / -2 - 1px); }
+.editor.freestyle .block.drop-after::before { bottom: calc(var(--s3) / -2 - 1px); }
 .editor.freestyle .block > .check-label { margin: 0; }
 /* Typing looks like the text it becomes, so the page does not jump when a paragraph is clicked, and
    there is no box around it, as on a page in Word: the cursor, and the handle beside it, show where

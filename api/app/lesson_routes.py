@@ -65,6 +65,12 @@ def list_lessons(archived: bool = False, teacher: PlatformUser = Depends(require
     return [_details(lesson, course_names) for lesson in db.scalars(query)]
 
 
+@teach_router.get("/lesson-tags")
+def lesson_tags(teacher: PlatformUser = Depends(require_teacher), db: Session = Depends(get_db)):
+    """The tags to offer while tagging a lesson: Cybersecurity and AI, then the others in use, most used first."""
+    return lessons.tags_in_use(db)
+
+
 class NewLesson(BaseModel):
     title: str
 
@@ -104,6 +110,7 @@ class Changes(BaseModel):
     title: str | None = None
     summary: str | None = None
     blocks: list | None = None
+    tags: list[str] | None = Field(default=None, max_length=50)     # checked by lessons.check_tags (at most MAX_TAGS kept)
     for_everyone: bool | None = None
     course_id: int | None = None
 
@@ -118,6 +125,8 @@ def change_lesson(lesson_id: int, body: Changes, teacher: PlatformUser = Depends
             lesson.summary = lessons.check_summary(body.summary)
         if body.blocks is not None:
             lesson.blocks = lessons.check_blocks(db, lesson, body.blocks)
+        if body.tags is not None:
+            lesson.tags = lessons.check_tags(db, body.tags, lesson.id)
         if "course_id" in body.model_fields_set:
             if body.course_id is not None and db.get(Course, body.course_id) is None:
                 raise lessons.LessonError("That course does not exist.")

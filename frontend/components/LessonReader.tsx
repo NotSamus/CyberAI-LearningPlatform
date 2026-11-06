@@ -10,6 +10,7 @@ import ProgressBar from "@/components/ProgressBar";
 import { Label, lessonLabel, publishLabel } from "@/components/Status";
 import LessonDone from "@/components/learn/LessonDone";
 import { courseName } from "@/components/learn/courses";
+import TagChips from "@/components/TagChips";
 import { api } from "@/lib/api";
 import { message } from "@/lib/errors";
 import { isCheck, outline, readingMinutes, rightFirstTime, type CheckState, type LessonPage, type MyLesson } from "@/lib/lessons";
@@ -40,7 +41,7 @@ export default function LessonReader({ lessonId }: { lessonId: string }) {
     return {
       id: lesson.id, title: lesson.title, summary: lesson.summary, published: lesson.published,
       course_id: lesson.course_id, course: lesson.course, opened_at: lesson.opened_at, completed_at: lesson.completed_at,
-      questions: checks.length, answered: checks.filter((b) => b.state?.closed).length,
+      questions: checks.length, answered: checks.filter((b) => b.state?.closed).length, tags: lesson.tags,
     };
   }, [lesson]);
   const lessons = useMyLessons(live);
@@ -145,8 +146,9 @@ export default function LessonReader({ lessonId }: { lessonId: string }) {
         description={lesson.summary || undefined}
       />
       <div className="lesson-facts">
-        {(checks.length > 0 || minutes > 0) && (
+        {(checks.length > 0 || minutes > 0 || lesson.tags.length > 0) && (
           <p className="meta">
+            <TagChips tags={lesson.tags} />
             {checks.length > 0 && (
               <span className="fact"><ListChecks aria-hidden />{checks.length === 1 ? "1 knowledge check" : `${checks.length} knowledge checks`}</span>
             )}

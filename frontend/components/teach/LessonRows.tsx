@@ -3,6 +3,7 @@ import { Archive, ArchiveRestore, ArrowDown, ArrowUp, BookOpen, ChartColumn, Cir
 import Link from "next/link";
 import Menu from "@/components/Menu";
 import { Label, publishLabel } from "@/components/Status";
+import TagChips from "@/components/TagChips";
 import { lessonFor, lessonForNobody, plural } from "@/components/teach/given";
 import { api, download, type Course } from "@/lib/api";
 import { formatWhen } from "@/lib/dates";
@@ -78,6 +79,7 @@ export default function LessonRows({ lessons, order, courses, reorder, withinCou
               </div>
               {lesson.summary && <p className="summary">{lesson.summary}</p>}
               <p className="meta">
+                <TagChips tags={lesson.tags} />
                 {lesson.archived_at && <span className="fact"><Archive aria-hidden />Archived {formatWhen(lesson.archived_at)}</span>}
                 {!withinCourse && (
                   <span className={`fact ${nobody ? "bad" : ""}`}>

@@ -23,6 +23,7 @@ export default function LessonsPage() {
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [tag, setTag] = useState("");                      // "": any tag, or none
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -35,7 +36,7 @@ export default function LessonsPage() {
   useEffect(load, [load]);
 
   const courseId = filter.startsWith("course-") ? Number(filter.slice("course-".length)) : null;
-  const shown = filter === "archived" ? archived : (items ?? []).filter((lesson) => {
+  const inView = filter === "archived" ? archived : (items ?? []).filter((lesson) => {
     if (filter === "everyone") return lesson.for_everyone;
     if (filter === "none") return lessonForNobody(lesson);
     if (courseId !== null) return !lesson.for_everyone && lesson.course_id === courseId;
@@ -43,7 +44,10 @@ export default function LessonsPage() {
   });
   // The order only means something within what one group of students sees: a course's lessons, or
   // those for everyone. All lessons together mix several groups, so the arrows are not offered there.
-  const reorder = filter === "everyone" || courseId !== null;
+  // A tag narrows whichever list is shown. Then the rows are not all of one group, so no arrows either.
+  const shown = tag ? inView.filter((lesson) => lesson.tags.includes(tag)) : inView;
+  const reorder = !tag && (filter === "everyone" || courseId !== null);
+  const allTags = [...new Set([...(items ?? []), ...archived].flatMap((lesson) => lesson.tags))].sort((a, b) => a.localeCompare(b));
   const audience = filter === "everyone" ? "everyone" : courseId !== null ? String(courseId) : "none";
 
   // The lessons shown, as one .zip with their pictures and notebooks, to import here or elsewhere.
@@ -101,12 +105,23 @@ export default function LessonsPage() {
                 <option value="archived">Archived ({archived.length})</option>
               </select>
             </label>
+            {allTags.length > 0 && (
+              <label>
+                Tag
+                <select value={tag} onChange={(e) => setTag(e.target.value)}>
+                  <option value="">All tags</option>
+                  {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+            )}
             <span className="muted">
               {filter === "archived"
                 ? "Students do not see archived lessons. Restore one to use it again, or delete it for good."
                 : reorder
                   ? "Students see these lessons in this order. Use the arrows to change it."
-                  : "To change the order students see lessons in, show one course, or the lessons for all students."}
+                  : tag
+                    ? "To change the order students see lessons in, choose All tags and one course, or the lessons for all students."
+                    : "To change the order students see lessons in, show one course, or the lessons for all students."}
             </span>
             {shown.length > 0 && (
               <button

@@ -223,6 +223,10 @@ a.card:hover { box-shadow: var(--shadow-2); }
 .chip.warn { background: var(--warn-tint); color: var(--warn); }
 .chip.bad, .badge.late, .badge.draft { background: var(--bad-tint); color: var(--error); }
 /* Facts about something, in a line: an icon and a few words each (course, due date, number of checks) */
+/* A lesson's tags (components/TagChips.tsx): neutral chips with a dot in the tag's own colour */
+.tags { display: inline-flex; flex-wrap: wrap; gap: var(--s1); }
+.tag { display: inline-flex; align-items: center; gap: var(--s1); padding: 0 var(--s2); background: var(--tint); color: var(--text); border-radius: var(--pill); font-size: var(--t-xs); font-weight: var(--bold); line-height: 1.75; white-space: nowrap; }
+.tag::before { content: ""; flex: none; width: 6px; height: 6px; background: hsl(var(--tag-hue), 70%, 50%); border-radius: 50%; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s4); margin: 0; color: var(--muted); font-size: var(--t-sm); }
 .fact { display: inline-flex; align-items: center; gap: var(--s1); color: var(--muted); font-size: var(--t-sm); }
 .fact.warn { color: var(--warn); }

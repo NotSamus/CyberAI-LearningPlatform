@@ -40,7 +40,7 @@ def write(teacher, title="TLS basics", picture=PICTURE, assignment_id=1) -> int:
     lesson_id = teacher.post("/api/teach/lessons", json={"title": title}).json()["id"]
     image_id = teacher.post("/api/teach/lesson-images", data={"lesson_id": lesson_id}, files={"file": ("p.png", picture)}).json()["id"]
     r = teacher.patch(f"/api/teach/lessons/{lesson_id}", json={
-        "summary": "What TLS is for.", "blocks": blocks(assignment_id, image_id), "for_everyone": True,
+        "summary": "What TLS is for.", "tags": ["Cybersecurity", "TLS"], "blocks": blocks(assignment_id, image_id), "for_everyone": True,
     })
     assert r.status_code == 200, r.text
     assert teacher.post(f"/api/teach/lessons/{lesson_id}/publish").status_code == 200
@@ -118,7 +118,7 @@ def test_a_lesson_goes_out_as_a_zip_and_comes_back_in(people, db):
         {"file": "notebooks/loops-1/lab.ipynb", "title": "Loops", "description": "For loops.", "requires_gpu": False, "points": 10.0, "data": []},
     ]
     lesson = json.loads(files["01-tls-basics/lesson.json"])
-    assert (lesson["title"], lesson["summary"]) == ("TLS basics", "What TLS is for.")
+    assert (lesson["title"], lesson["summary"], lesson["tags"]) == ("TLS basics", "What TLS is for.", ["Cybersecurity", "TLS"])
     # Pictures and notebooks are named by their file in the .zip, not by an id that means nothing elsewhere.
     picture, empty, link = lesson["blocks"][1], lesson["blocks"][2], lesson["blocks"][4]
     assert picture == {"type": "image", "id": "pic1", "alt": "A padlock in the address bar", "image": "01-tls-basics/images/1.png"}
@@ -133,6 +133,7 @@ def test_a_lesson_goes_out_as_a_zip_and_comes_back_in(people, db):
     assert r.json() == {"lessons": [{"id": 2, "title": "TLS basics"}], "notebooks_added": [], "notebooks_linked": ["Loops"], "warnings": []}
     copy = teacher.get("/api/teach/lessons/2").json()
     assert (copy["published"], copy["for_everyone"], copy["course_id"], copy["summary"]) == (False, False, None, "What TLS is for.")
+    assert copy["tags"] == ["Cybersecurity", "TLS"]
     assert [lesson["id"] for lesson in teacher.get("/api/teach/lessons").json()] == [1, 2]
     new_picture = copy["blocks"][1]["image_id"]
     assert new_picture != 1 and copy["blocks"] == blocks(assignment_id=1, image_id=new_picture)

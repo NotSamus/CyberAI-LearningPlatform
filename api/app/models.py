@@ -189,6 +189,8 @@ class Lesson(Base):
     # Archived instead of deleted: kept with its pictures and answers, shown only under Teach >
     # Lessons > Archived, and hidden from students (archiving also unpublishes it).
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Words a teacher puts on the lesson ("Cybersecurity", "AI", ...), shown to teachers and students.
+    tags: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")    # checked by app.lessons.check_tags
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

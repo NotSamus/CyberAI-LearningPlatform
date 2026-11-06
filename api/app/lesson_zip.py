@@ -12,7 +12,7 @@ In the file (format version 1):
     lessons.json                          what is in it: {"format": "cyberai-lessons", "version": 1,
                                           "exported_at", "lessons": [each lesson's file, in order],
                                           "notebooks": [{"file", "title", "description", "requires_gpu", "points"}]}
-    01-tls-basics/lesson.json             {"title", "summary", "blocks"}
+    01-tls-basics/lesson.json             {"title", "summary", "tags", "blocks"}
     01-tls-basics/images/1.png            the lesson's pictures
     notebooks/functions-lab-7/lab.ipynb   the notebooks the lessons link to,
     notebooks/functions-lab-7/ports.csv   and each one's data files beside it
@@ -125,7 +125,7 @@ def export(db: Session, chosen: list[Lesson]) -> bytes:
                 pictures[image.id] = f"{folder}/images/{len(pictures) + 1}{EXTENSIONS.get(image.content_type, '')}"
                 put(pictures[image.id], image.data, zipfile.ZIP_STORED)        # pictures are compressed already
             blocks = [_named(block, pictures, files) for block in lesson.blocks]
-            put(f"{folder}/lesson.json", _json({"title": lesson.title, "summary": lesson.summary, "blocks": blocks}))
+            put(f"{folder}/lesson.json", _json({"title": lesson.title, "summary": lesson.summary, "tags": lesson.tags, "blocks": blocks}))
             lesson_files.append(f"{folder}/lesson.json")
         data_files: dict[int, list[str]] = {}
         for a in notebooks:
@@ -179,12 +179,14 @@ class _LessonFile(BaseModel):
     title: str
     summary: str = ""
     blocks: list = Field(default_factory=list)          # checked by lessons.check_shape
+    tags: list[str] = Field(default_factory=list, max_length=50)    # files exported before tags have none
 
 
 @dataclass
 class NewLesson:
     title: str
     summary: str
+    tags: list[str]
     blocks: list[dict]                  # checked, with no picture or notebook linked yet
     pictures: dict[str, str]            # block id -> its picture's file in the .zip
     notebooks: dict[str, str]           # block id -> its notebook's file in the .zip
@@ -274,6 +276,7 @@ def _lesson(raw: bytes, path: str) -> NewLesson:
     try:
         title = lessons.check_title(content.title)
         summary = lessons.check_summary(content.summary)
+        tags = lessons.clean_tags(content.tags)
         blocks = lessons.check_shape([_unlinked(block) for block in content.blocks])
     except LessonError as e:
         raise LessonError(f"{path}: {e}")
@@ -290,7 +293,7 @@ def _lesson(raw: bytes, path: str) -> NewLesson:
         (pictures if key == "image" else notebooks)[block["id"]] = file
     if len(set(pictures.values())) > lessons.MAX_IMAGES:
         raise LessonError(f'"{title}" has more than {lessons.MAX_IMAGES} pictures.')
-    return NewLesson(title, summary, blocks, pictures, notebooks)
+    return NewLesson(title, summary, tags, blocks, pictures, notebooks)
 
 
 def _notebook(db: Session, entry: _Notebook, data: bytes, data_files: dict[str, bytes]) -> NewNotebook:
@@ -417,7 +420,7 @@ def store(db: Session, found: Found, created_by: int | None, for_everyone: bool,
         made = []
         for n, new in enumerate(found.lessons, start=1):
             lesson = Lesson(
-                title=new.title, summary=new.summary, blocks=[], live_blocks=[], position=last + n,
+                title=new.title, summary=new.summary, tags=lessons.check_tags(db, new.tags), blocks=[], live_blocks=[], position=last + n,
                 for_everyone=for_everyone, course_id=course_id, created_by=created_by,
             )
             db.add(lesson)

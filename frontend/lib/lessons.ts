@@ -70,7 +70,11 @@ export type Lesson = {
   course_id: number | null;
   course: string | null;
   questions: number;          // how many knowledge checks it has
+  tags: string[];             // words the teacher put on it ("Cybersecurity", "AI", ...)
 };
+
+export const MAX_TAGS = 8;              // same as MAX_TAGS in api/app/lessons.py
+export const MAX_TAG_LENGTH = 30;       // same as MAX_TAG_LENGTH there
 
 // With the logged-in person's own progress.
 export type MyLesson = Lesson & { opened_at: string | null; completed_at: string | null; answered: number };
@@ -171,6 +175,16 @@ export function slashAt(text: string, caret: number): { before: string; typed: s
   const line = text.slice(start, newline === -1 ? text.length : newline);
   if (caret <= start || !/^\/[a-z ]{0,20}$/i.test(line)) return null;
   return { before: text.slice(0, start), typed: line.slice(1).toLowerCase(), after: newline === -1 ? "" : text.slice(newline + 1) };
+}
+
+// The list with the item at `from` moved to `slot`, a place between items (0: before the first,
+// list.length: after the last), as where a dragged block is dropped.
+export function moveTo<T>(list: T[], from: number, slot: number): T[] {
+  const to = slot > from ? slot - 1 : slot;
+  if (to === from) return list;
+  const moved = [...list];
+  moved.splice(to, 0, ...moved.splice(from, 1));
+  return moved;
 }
 
 export const BLOCK_LABELS: Record<Block["type"], string> = {

@@ -54,7 +54,7 @@ def test_a_lesson_is_written_as_a_draft_and_then_published(people, db):
     assert r.json() == {
         "id": 1, "title": "TLS basics", "summary": "", "published": False, "course_id": None, "course": None,
         "questions": 0, "for_everyone": False, "published_at": None, "changed": False, "blocks_count": 0,
-        "archived_at": None,
+        "archived_at": None, "tags": [],
     }
 
     # The working copy is saved as it is, unfinished questions included...
@@ -109,6 +109,26 @@ def test_a_lesson_is_archived_instead_of_deleted_and_can_be_restored(people, db)
     assert db.scalar(select(func.count()).select_from(LessonAnswer)) == 1
     assert teacher.post(f"/api/teach/lessons/{lesson_id}/publish").status_code == 200
     assert titles(maria) == ["TLS basics"]
+
+def test_lessons_are_tagged_and_the_tags_keep_one_spelling(people, db):
+    teacher, maria, _ = people
+    first = write(teacher, [text()])
+    r = teacher.patch(f"/api/teach/lessons/{first}", json={"tags": ["  cybersecurity ", "Network   basics", "CYBERSECURITY", "", "ai"]})
+    assert r.status_code == 200 and r.json()["tags"] == ["Cybersecurity", "Network basics", "AI"]     # tidied, once each, suggested spellings
+    assert [lesson["tags"] for lesson in maria.get("/api/lessons").json()] == [["Cybersecurity", "Network basics", "AI"]]   # students see them
+
+    # Another lesson typing a tag already in use gets its spelling; the suggested ones always come first
+    second = write(teacher, [text()], title="Prompt injection")
+    assert teacher.patch(f"/api/teach/lessons/{second}", json={"tags": ["network BASICS", "LLMs"]}).json()["tags"] == ["Network basics", "LLMs"]
+    assert teacher.get("/api/teach/lesson-tags").json() == ["Cybersecurity", "AI", "Network basics", "LLMs"]
+    # A lesson can still change how its own tag is spelled while no other lesson has it
+    assert teacher.patch(f"/api/teach/lessons/{second}", json={"tags": ["Network basics", "LLMS"]}).json()["tags"] == ["Network basics", "LLMS"]
+
+    for bad, why in ((["x" * 31], "at most 30 characters"), ([f"tag {n}" for n in range(9)], "at most 8 tags")):
+        r = teacher.patch(f"/api/teach/lessons/{first}", json={"tags": bad})
+        assert r.status_code == 400 and why in r.json()["detail"]
+    assert teacher.get(f"/api/teach/lessons/{first}").json()["tags"] == ["Cybersecurity", "Network basics", "AI"]
+    assert maria.get("/api/teach/lesson-tags").status_code == 403
 
 def test_what_cannot_be_published(people, db):
     teacher, _, _ = people
@@ -250,7 +270,7 @@ def test_completing_a_lesson(people, db):
 
     assert maria.get("/api/lessons").json()[0] == {
         "id": 1, "title": "TLS basics", "summary": "", "published": True, "course_id": None, "course": None,
-        "questions": 2, "opened_at": None, "completed_at": None, "answered": 0,
+        "questions": 2, "tags": [], "opened_at": None, "completed_at": None, "answered": 0,
     }
     opened = maria.get("/api/lessons/1").json()
     assert opened["opened_at"] is not None and (opened["questions"], opened["answered"], opened["completed_at"]) == (2, 0, None)

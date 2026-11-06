@@ -325,9 +325,11 @@ Writing is meant to be quick:
   and the text after it goes on below the new block. **Ctrl/⌘ + Enter** adds a text block below the block you are in.
 - **Blocks | Freestyle** (at the top, next to Preview) picks how the lesson looks while you write, and each
   browser remembers it. Blocks shows every block as a card with its label and buttons. Freestyle shows the
-  lesson as one page, like Notion or Word: text sits on the page with no boxes, even while you type in it, each block has a ⋮⋮ handle on its left
-  (on hover, or always on an iPad) to move, copy or delete it, and a click under the last block goes on
-  writing. Only the look changes: the lesson, and what students see, is the same in both.
+  lesson as one page, like Notion or Word: text sits on the page with no boxes, even while you type in it,
+  and a click under the last block goes on writing. Each block has a ⋮⋮ handle on its left (on hover, or
+  always on an iPad): drag it to move the block, and a line shows where it will land (on an iPad, press
+  and hold it first); click it for a menu to move, copy or delete the block. Only the look changes: the
+  lesson, and what students see, is the same in both.
 - In a question, **Enter** adds the next option and starting an option with `*` ticks it as correct.
   Options left empty are ignored.
 - **Write or paste a whole lesson as text** (at the bottom of the editor) turns one piece of text into
@@ -342,6 +344,13 @@ accepted answer). **Preview** shows your working copy as a student would see it,
 **For** (top of the editor) chooses who gets the lesson: all students or one course. The arrows in the
 list of lessons (Teach > Lessons with one course chosen, or the course's page) set the order students see
 them in. A lesson's **Progress** tab shows who has done it.
+
+**Tags** (in the editor's header, next to For) are words that say what a lesson is about: one click adds
+Cybersecurity or AI, and any other tag can be typed (Enter or a comma ends it; the list offers the tags
+other lessons have). A lesson has up to 8, of up to 30 characters. A tag already in use keeps its
+spelling, so typing "ai" gives "AI". Tags show as chips with a coloured dot on Teach > Lessons (which
+can also show one tag's lessons), on students' Home and on the lesson's page, and they travel with a
+lesson exported as a .zip.
 
 Lessons are **archived, not deleted**: **Archive** in a lesson's ⋯ menu unpublishes it and moves it,
 with its pictures and what students answered, to **Archived** (the last choice of Show on Teach >

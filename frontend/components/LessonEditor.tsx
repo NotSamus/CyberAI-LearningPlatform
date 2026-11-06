@@ -3,21 +3,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown, ArrowUp, CircleAlert, Code, Copy, Download, Eye, GripVertical, ImageIcon, ImagePlus, Images, LayoutList, Lightbulb,
-  ListChecks, NotebookPen, PenLine, Plus, Send, ToggleLeft, Trash2, Type, Undo2, Users, Video, X, type LucideIcon,
+  ListChecks, NotebookPen, PenLine, Plus, Send, Tag, ToggleLeft, Trash2, Type, Undo2, Users, Video, X, type LucideIcon,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import LessonRail, { leftLesson } from "@/components/LessonRail";
 import Markdown from "@/components/Markdown";
 import Menu from "@/components/Menu";
 import PageHeader from "@/components/PageHeader";
 import { Label, publishLabel } from "@/components/Status";
+import { tagStyle } from "@/components/TagChips";
 import FileDrop from "@/components/teach/FileDrop";
 import LessonTabs from "@/components/teach/LessonTabs";
 import { api, download, type Course, type ManagedAssignment } from "@/lib/api";
 import { formatWhen } from "@/lib/dates";
 import { JSON_HEADERS, message } from "@/lib/errors";
 import {
-  BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, blockLabel, duplicate, importText, lessonsZip, newId, outline, slashAt, youtubeId,
+  BLOCK_MENU, MAX_IMAGE_BYTES, MAX_OPTIONS, MAX_TAG_LENGTH, MAX_TAGS, blockLabel, duplicate, importText, lessonsZip, moveTo, newId, outline, slashAt, youtubeId,
   type Block, type Kind, type LessonDraft, type ManagedLesson, type Picture, type Tone,
 } from "@/lib/lessons";
 
@@ -45,12 +46,13 @@ type View = "blocks" | "freestyle";
 const VIEW_KEY = "cyberai_lesson_view";
 
 // What is sent to the server when the lesson is saved. An emptied title is left out: the saved one stays.
-function toSave(title: string, summary: string, audience: string, blocks: Block[]): string {
+function toSave(title: string, summary: string, audience: string, tags: string[], blocks: Block[]): string {
   return JSON.stringify({
     ...(title.trim() ? { title } : {}),
     summary,
     for_everyone: audience === "everyone",
     course_id: audience === "none" || audience === "everyone" ? null : Number(audience),
+    tags,
     blocks,
   });
 }
@@ -64,6 +66,8 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [audience, setAudience] = useState("none");       // "none", "everyone", or the id of a course
+  const [tags, setTags] = useState<string[]>([]);
+  const [knownTags, setKnownTags] = useState<string[]>([]);    // to offer while tagging: Cybersecurity, AI, then the others in use
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [assignments, setAssignments] = useState<ManagedAssignment[]>([]);
@@ -75,6 +79,8 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
   const [focus, setFocus] = useState<string | null>(null);    // a block or option to put the cursor in
   const active = useRef<string | null>(null);             // the block being worked on: pasted pictures go after it
   const [view, setView] = useState<View>("blocks");
+  // Freestyle: a block being dragged by its handle, and the place between blocks it would land in.
+  const [drag, setDrag] = useState<{ from: number; slot: number | null } | null>(null);
 
   // After the first render, not in useState: the server draws the page first and has no localStorage.
   useEffect(() => {
@@ -90,7 +96,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     } catch { /* not remembered, still shown */ }
   }
 
-  const draft = useMemo(() => toSave(title, summary, audience, blocks), [title, summary, audience, blocks]);
+  const draft = useMemo(() => toSave(title, summary, audience, tags, blocks), [title, summary, audience, tags, blocks]);
   const latest = useRef(draft);                           // what is on screen
   latest.current = draft;
   const saved = useRef<string | null>(null);              // what the server has; null until the lesson is loaded
@@ -99,14 +105,17 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
   useEffect(() => {
     Promise.all([
       api<LessonDraft>(`/teach/lessons/${lessonId}`), api<Course[]>("/teach/courses"), api<ManagedAssignment[]>("/teach/assignments"),
+      api<string[]>("/teach/lesson-tags"),
     ])
-      .then(([loaded, classes, notebooks]) => {
+      .then(([loaded, classes, notebooks, known]) => {
         const given = loaded.for_everyone ? "everyone" : loaded.course_id !== null ? String(loaded.course_id) : "none";
-        saved.current = toSave(loaded.title, loaded.summary, given, loaded.blocks);
+        saved.current = toSave(loaded.title, loaded.summary, given, loaded.tags, loaded.blocks);
         setLesson(loaded);
         setTitle(loaded.title);
         setSummary(loaded.summary);
         setAudience(given);
+        setTags(loaded.tags);
+        setKnownTags(known);
         if (loaded.blocks.length > 0) {
           setBlocks(loaded.blocks);
         } else {            // nothing written yet: start with a text block, ready to type in
@@ -206,6 +215,13 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
       return after.trim() === "" ? kept : [...kept, { type: "text", id: newId(), text: after }];
     }));
     setFocus(made.id);
+  }
+
+  // Freestyle: the place between blocks a dragged one would be dropped in, from the pointer's
+  // height: after every block whose middle is above it.
+  function slotAt(y: number): number {
+    return Array.from(document.querySelectorAll<HTMLElement>(".editor > .block"))
+      .filter((el) => { const box = el.getBoundingClientRect(); return box.top + box.height / 2 < y; }).length;
   }
 
   // Freestyle: a click under the last block goes on writing there, in a new text block unless the
@@ -335,6 +351,8 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
     : upToDate ? "Students see the lesson as it is here."
       : `Students still see the version of ${formatWhen(lesson.published_at)}.`;
   const free = view === "freestyle";
+  // Where the line showing the drop goes: nowhere when the block would stay where it is.
+  const dropSlot = drag && drag.slot !== null && drag.slot !== drag.from && drag.slot !== drag.from + 1 ? drag.slot : null;
 
   return (
     <div
@@ -372,6 +390,7 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
         }
         meta={
           <>
+            <TagPicker tags={tags} known={knownTags} onChange={setTags} />
             <label className="fact">
               <Users aria-hidden />For
               <select value={audience} onChange={(e) => setAudience(e.target.value)}>
@@ -408,7 +427,23 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
       />
       {rail}
 
-    <div className={`editor ${free ? "freestyle" : ""}`}>
+    <div
+      className={`editor ${free ? "freestyle" : ""}`}
+      onDragOver={(e) => {
+        if (!drag) return;          // pictures dragged in from outside are handled by the page
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const slot = slotAt(e.clientY);
+        if (slot !== drag.slot) setDrag({ ...drag, slot });
+      }}
+      onDrop={(e) => {
+        if (!drag) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setBlocks((all) => moveTo(all, drag.from, slotAt(e.clientY)));
+        setDrag(null);
+      }}
+    >
       {title.trim() === "" && <p className="error">A lesson needs a title: until it has one, the earlier title is kept.</p>}
       {lesson.published && audience === "none" && (
         <p className="error">Published, but given to nobody: no student can see it. Choose who it is for, above.</p>
@@ -428,7 +463,11 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
         <Fragment key={block.id}>
           {!free && index > 0 && <AddHere onAdd={(kind) => insert(index, make(kind))} />}
           <div
-            className="block" data-type={block.type}
+            className={[
+              "block", drag?.from === index && "dragging", dropSlot === index && "drop-before",
+              dropSlot === blocks.length && index === blocks.length - 1 && "drop-after",
+            ].filter(Boolean).join(" ")}
+            data-type={block.type}
             onFocus={() => { active.current = block.id; }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -439,10 +478,22 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
           >
             {free ? (
               <>
-                {/* A handle beside the block, shown on hover or while working in it, like Notion's */}
-                <div className="block-handle">
+                {/* A handle beside the block, shown on hover or while working in it, like Notion's: drag
+                    it to move the block, or click it for a menu (which keyboards use to move it) */}
+                <div
+                  className="block-handle" draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("application/x-lesson-block", block.id);   // not text: dropped on a text field, nothing is typed
+                    const whole = e.currentTarget.closest<HTMLElement>(".block");
+                    if (whole) e.dataTransfer.setDragImage(whole, 16, 16);              // the block follows the pointer, not just the handle
+                    setDrag({ from: index, slot: null });
+                  }}
+                  onDragEnd={() => setDrag(null)}
+                >
                   <Menu
-                    label={`Move, copy or delete this ${blockLabel(block).toLowerCase()} block`} trigger={<GripVertical aria-hidden />}
+                    label={`Drag to move this ${blockLabel(block).toLowerCase()} block, or click to move, copy or delete it`}
+                    trigger={<GripVertical aria-hidden />}
                     items={[
                       { label: "Move up", icon: ArrowUp, disabled: index === 0, onSelect: () => move(index, -1) },
                       { label: "Move down", icon: ArrowDown, disabled: index === blocks.length - 1, onSelect: () => move(index, 1) },
@@ -533,7 +584,8 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
           <button type="button" className="keep-writing" onClick={keepWriting}>Click here to keep writing</button>
           <p className="muted hint">
             Type <kbd>/</kbd> at the start of any line for a question, code, a picture or a video. Markdown works as you type:
-            <kbd>#</kbd> for a heading, <kbd>**bold**</kbd>, <kbd>-</kbd> for a list. Paste or drop pictures anywhere.
+            <kbd>#</kbd> for a heading, <kbd>**bold**</kbd>, <kbd>-</kbd> for a list. Drag a block by its <kbd>⋮⋮</kbd> to move it,
+            and paste or drop pictures anywhere.
           </p>
         </>
       ) : (
@@ -553,6 +605,60 @@ export default function LessonEditor({ lessonId }: { lessonId: string }) {
       <ImportText onImport={(made) => { setBlocks((all) => [...all, ...made]); setFocus(made[0]?.id ?? null); }} />
     </div>
     </div>
+  );
+}
+
+// The lesson's tags, in the editor's header: each with an × to take it off, a field to add one
+// (Enter or a comma ends it, the list offers the tags in use), and a button for each suggested tag
+// (Cybersecurity, AI) it does not have yet. A tag in use elsewhere keeps the spelling it has there.
+function TagPicker({ tags, known, onChange }: { tags: string[]; known: string[]; onChange: (tags: string[]) => void }) {
+  const [typed, setTyped] = useState("");
+  const listId = useId();
+  const has = (tag: string) => tags.some((t) => t.toLowerCase() === tag.toLowerCase());
+  const offered = known.filter((tag) => !has(tag));
+
+  function add(raw: string) {
+    const tag = raw.split(/\s+/).filter(Boolean).join(" ");
+    setTyped("");
+    if (!tag || has(tag) || tags.length >= MAX_TAGS) return;
+    onChange([...tags, known.find((k) => k.toLowerCase() === tag.toLowerCase()) ?? tag]);
+  }
+
+  return (
+    <span className="tag-picker">
+      <Tag aria-hidden />
+      {tags.map((tag) => (
+        <span key={tag} className="tag" style={tagStyle(tag)}>
+          {tag}
+          <button type="button" className="icon" title={`Remove ${tag}`} aria-label={`Remove the tag ${tag}`} onClick={() => onChange(tags.filter((t) => t !== tag))}>
+            <X aria-hidden />
+          </button>
+        </span>
+      ))}
+      {tags.length < MAX_TAGS && (
+        <>
+          <input
+            list={listId} value={typed} maxLength={MAX_TAG_LENGTH} aria-label="Add a tag" placeholder={tags.length === 0 ? "Add a tag" : "Add another"}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value.endsWith(",")) add(value.slice(0, -1));
+              // Picked from the list (or pasted): the whole tag came at once, not a letter typed.
+              else if (offered.includes(value) && value.length - typed.length > 1) add(value);
+              else setTyped(value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); add(typed); }
+              else if (e.key === "Backspace" && typed === "" && tags.length > 0) onChange(tags.slice(0, -1));
+            }}
+            onBlur={() => add(typed)}
+          />
+          <datalist id={listId}>{offered.map((tag) => <option key={tag} value={tag} />)}</datalist>
+          {known.slice(0, 2).filter((tag) => !has(tag)).map((tag) => (
+            <button key={tag} type="button" className="text-button" onClick={() => add(tag)}>+ {tag}</button>
+          ))}
+        </>
+      )}
+    </span>
   );
 }
 
